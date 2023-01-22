@@ -8,9 +8,9 @@ object UrlPath:
     def apply( url : String ) : Abs = apply(URL(url))
     def apply( url : URL    ) : Abs = Abs(URL(url,"/"), Rooted.parse(url.getPath) )
   final case class Abs private[unstatic] ( server : URL, path : Rooted ) extends UrlPath:
-    def resolve(unrooted: UrlPath.Unrooted): UrlPath.Abs = this.copy( path = path.resolve(unrooted) )
-    def resolveSibling(unrooted: UrlPath.Unrooted): UrlPath.Abs = this.copy( path = path.resolveSibling(unrooted) )
-    def relativize( other : Abs ) : Unrooted =
+    def resolve(relpath: UrlPath.Rel): UrlPath.Abs = this.copy( path = path.resolve(relpath) )
+    def resolveSibling(relpath: UrlPath.Rel): UrlPath.Abs = this.copy( path = path.resolveSibling(relpath) )
+    def relativize( other : Abs ) : Rel =
       if (this.server == other.server) then
         path.relativize(other.path)
       else
@@ -20,11 +20,11 @@ object UrlPath:
   trait PathPart[T <: PathPart[T]] extends UrlPath:
     def elements: Vector[String]
     private[unstatic] def withElements( elements : Vector[String] ) : T
-    def resolve(unrooted: Unrooted): T = this.withElements( this.elements ++ unrooted.elements )
-    def resolveSibling(unrooted: Unrooted): T = this.withElements( this.elements.init ++ unrooted.elements ) // will throw if we're empty!
-    def relativize( other : T ) : UrlPath.Unrooted =
+    def resolve(relpath: Rel): T = this.withElements( this.elements ++ relpath.elements )
+    def resolveSibling(relpath: Rel): T = this.withElements( this.elements.init ++ relpath.elements ) // will throw if we're empty!
+    def relativize( other : T ) : UrlPath.Rel =
       val shared = this.elements.zip(other.elements).takeWhile(tup => tup(0) == tup(1)).map(_(0))
-      Unrooted( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements )
+      Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements )
     def dedottify : T =
       val dedot1 = elements.filter( _ == ".")
       if dedot1(0) == ".." then
@@ -47,19 +47,19 @@ object UrlPath:
     def apply( path : String )             : Rooted = Rooted.parse(path)
   case class Rooted private[unstatic] ( val elements : Vector[String] ) extends PathPart[Rooted]:
     private[unstatic] def withElements( elements : Vector[String] ) : Rooted = this.copy(elements = elements)
-    def unroot : Unrooted = Unrooted( this.elements )
+    def unroot : Rel = Rel( this.elements )
     override def toString() : String = "/" + super.toString()
 
-  object Unrooted:
+  object Rel:
     private def preparse(path: String): Vector[String] =
       if path.nonEmpty && path(0) == '/' then
-        throw new BadPathException(s"Putative unrooted path '${path}' must not begin with '/'.")
+        throw new BadPathException(s"Putative relative (unrooted) path '${path}' must not begin with '/'.")
       path.split("""\/+""").filter(_.nonEmpty).to(Vector)
-    def parse( path : String ) : Unrooted = Unrooted(preparse(path))
-    def apply( path : String ) : Unrooted = parse(path)
-    def fromElements( elements : String* ) : Unrooted = Unrooted( elements.filter( _.nonEmpty ).to(Vector) )
-  case class Unrooted private[unstatic](elements: Vector[String]) extends PathPart[Unrooted]:
-    private[unstatic] def withElements( elements : Vector[String] ) : Unrooted = this.copy(elements = elements)
+    def parse( path : String ) : Rel = Rel(preparse(path))
+    def apply( path : String ) : Rel = parse(path)
+    def fromElements( elements : String* ) : Rel = Rel( elements.filter( _.nonEmpty ).to(Vector) )
+  case class Rel private[unstatic](elements: Vector[String]) extends PathPart[Rel]:
+    private[unstatic] def withElements( elements : Vector[String] ) : Rel = this.copy(elements = elements)
 
   // TODO: Better validation that "absolute" paths are
   //       valid absolute URLs
@@ -76,11 +76,12 @@ object UrlPath:
     if (isAbsolute(path)) then
       Abs(path)
     else if path.isEmpty || path(0) != '/' then
-      Unrooted(path)
+      Rel(path)
     else Rooted(path)
 
 sealed trait UrlPath:
-  def resolve(unrooted: UrlPath.Unrooted): UrlPath
-  def resolveSibling(unrooted: UrlPath.Unrooted): UrlPath
+  def resolve(relpath: UrlPath.Rel): UrlPath
+  def resolveSibling(relpath: UrlPath.Rel): UrlPath
+  def reroot(rooted : UrlPath.Rooted) = resolve(rooted.unroot)
 
 
