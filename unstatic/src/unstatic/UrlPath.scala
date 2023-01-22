@@ -6,8 +6,8 @@ object UrlPath:
   object Abs:
     def parse( url : String ) : Abs = apply(url)
     def apply( url : String ) : Abs = apply(URL(url))
-    def apply( url : URL    ) : Abs = Abs(URL(url,"/"), Rooted.parse[Server](url.getPath) )
-  final case class Abs private[unstatic] ( server : URL, path : Rooted[Server] ) extends UrlPath:
+    def apply( url : URL    ) : Abs = Abs(URL(url,"/"), Rooted.parse(url.getPath) )
+  final case class Abs private[unstatic] ( server : URL, path : Rooted ) extends UrlPath:
     def resolve(unrooted: UrlPath.Unrooted): UrlPath.Abs = this.copy( path = path.resolve(unrooted) )
     def resolveSibling(unrooted: UrlPath.Unrooted): UrlPath.Abs = this.copy( path = path.resolveSibling(unrooted) )
     def relativize( other : Abs ) : Unrooted =
@@ -42,11 +42,11 @@ object UrlPath:
         throw new BadPathException(s"Putative rooted path '${path}' must begin with '/'.")
       path.split("""\/+""").filter(_.nonEmpty).to(Vector)
 
-    def fromElements[T]( elements : String* ) : Rooted[T] = Rooted[T]( elements.filter( _.nonEmpty ).to(Vector) )
-    def parse[T]( path : String )             : Rooted[T] = Rooted[T]( preparse(path) )
-    def apply[T]( path : String )             : Rooted[T] = Rooted.parse[T](path)
-  case class Rooted[T] private[unstatic] ( val elements : Vector[String] ) extends PathPart[Rooted[T]]:
-    private[unstatic] def withElements( elements : Vector[String] ) : Rooted[T] = this.copy(elements = elements)
+    def fromElements( elements : String* ) : Rooted = Rooted( elements.filter( _.nonEmpty ).to(Vector) )
+    def parse( path : String )             : Rooted = Rooted( preparse(path) )
+    def apply( path : String )             : Rooted = Rooted.parse(path)
+  case class Rooted private[unstatic] ( val elements : Vector[String] ) extends PathPart[Rooted]:
+    private[unstatic] def withElements( elements : Vector[String] ) : Rooted = this.copy(elements = elements)
     def unroot : Unrooted = Unrooted( this.elements )
     override def toString() : String = "/" + super.toString()
 
@@ -72,12 +72,12 @@ object UrlPath:
       case (-1, _ ) => false
       case (ci, si) => ci < si
 
-  def parse[T]( path : String ) : UrlPath =
+  def parse( path : String ) : UrlPath =
     if (isAbsolute(path)) then
       Abs(path)
     else if path.isEmpty || path(0) != '/' then
       Unrooted(path)
-    else Rooted[T](path)
+    else Rooted(path)
 
 sealed trait UrlPath:
   def resolve(unrooted: UrlPath.Unrooted): UrlPath
