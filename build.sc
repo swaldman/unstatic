@@ -4,7 +4,9 @@ import mill.scalalib.publish._
 
 object Dependency {
   object Test {
-    val Scalatest = ivy"org.scalatest::scalatest:3.2.15"
+    //val Scalatest = ivy"org.scalatest::scalatest:3.2.15"
+    val Scalacheck = ivy"org.scalacheck::scalacheck:1.17.0"
+    val Utest = ivy"com.lihaoyi::utest:0.8.1"
   }
 }
 
@@ -14,10 +16,12 @@ object unstatic extends ScalaModule with PublishModule {
   // supports Scala 3.2.1
   override def ammoniteVersion = "2.5.6"
 
-  object test extends Tests with TestModule.ScalaTest {
+  // override def scalacOptions = T{ Seq("-explain") }
+
+  object test extends Tests with TestModule.Utest {
     override def scalaVersion = "3.2.1"
 
-    override def ivyDeps = T{ super.ivyDeps() ++ Agg(Dependency.Test.Scalatest) }
+    override def ivyDeps = T{ super.ivyDeps() ++ Agg(Dependency.Test.Scalacheck, Dependency.Test.Utest) }
   }
 
   // publishing stuff
