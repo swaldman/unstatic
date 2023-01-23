@@ -44,6 +44,8 @@ object UrlPath:
         throw new BadPathException(s"Putative rooted path '${path}' must begin with '/'.")
       path.split("""\/+""").filter(_.nonEmpty).to(Vector)
 
+    val root = Rooted(Vector.empty)
+
     def fromElements( elements : String* ) : Rooted = Rooted( elements.filter( _.nonEmpty ).to(Vector) )
     def parse( path : String )             : Rooted = Rooted( preparse(path) )
     def apply( path : String )             : Rooted = Rooted.parse(path)
