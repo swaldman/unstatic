@@ -1,6 +1,6 @@
 package unstatic
 
-import java.net.{URL, URLEncoder}
+import java.net.URL
 
 object UrlPath:
   object Abs:
@@ -35,7 +35,7 @@ object UrlPath:
       val offsetSnipped = dedot1.zip(offset).filter( tup => tup(0) != ".." ).map( tup => tup(1) ).filter( _ != ".." )
       this.withElements( offsetSnipped.tail )
 
-    override def toString() : String = elements.map( URLEncoder.encode(_, scala.io.Codec.UTF8.charSet) ).mkString("/")
+    override def toString() : String = elements.mkString("/")
   end PathPart
 
   object Rooted:
