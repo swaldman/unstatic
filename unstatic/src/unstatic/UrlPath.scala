@@ -52,6 +52,8 @@ object UrlPath:
   case class Rooted private[unstatic] ( val elements : Vector[String] ) extends PathPart[Rooted]:
     private[unstatic] def withElements( elements : Vector[String] ) : Rooted = this.copy(elements = elements)
     def unroot : Rel = Rel( this.elements )
+    def isPrefixOf(other : Rooted) =
+      other.elements.length >= this.elements.length && (0 until this.elements.length).forall( i => this.elements(i) == other.elements(i))
     override def toString() : String = "/" + super.toString()
 
   object Rel:
