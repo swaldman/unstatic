@@ -54,6 +54,7 @@ object UrlPath:
     def unroot : Rel = Rel( this.elements )
     def isPrefixOf(other : Rooted) =
       other.elements.length >= this.elements.length && (0 until this.elements.length).forall( i => this.elements(i) == other.elements(i))
+    def isRoot : Boolean = elements.isEmpty
     override def toString() : String = "/" + super.toString()
 
   object Rel:
