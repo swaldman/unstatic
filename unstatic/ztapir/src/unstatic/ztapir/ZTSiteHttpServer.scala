@@ -11,7 +11,7 @@ import unstatic.UrlPath.*
 
 class ZTSiteHttpServer(site : ZTSite) extends ZIOAppDefault:
 
-  inline def options( inline verbose : Boolean ) =
+  inline def ztapirServerInterpreterOptions( inline verbose : Boolean ) =
     if verbose then
       // modified from https://github.com/longliveenduro/zio-geolocation-tapir-tapir-starter/blob/b79c88b9b1c44a60d7c547d04ca22f12f420d21d/src/main/scala/com/tsystems/toil/Main.scala
       ZioHttpServerOptions
@@ -29,13 +29,13 @@ class ZTSiteHttpServer(site : ZTSite) extends ZIOAppDefault:
     else
       ZioHttpServerOptions.default
 
-  val serverOptions = options(false)
+  val serverInterpreterOptions = ztapirServerInterpreterOptions(false )
 
   def buildApp( endpointSource: ZTEndpointBinding.Source ) : HttpApp[Any,Throwable] =
     val endpointBindings = endpointSource.endpointBindings
     val endpoints = endpointBindings.map( _.ztServerEndpoint )
     if (endpoints.isEmpty) throw new Exception("No endpoints defined.") //XXX: Better Exceptions
-    def toHttp( endpoint : ZTServerEndpoint) = ZioHttpInterpreter( serverOptions ).toHttp( endpoint )
+    def toHttp( endpoint : ZTServerEndpoint) = ZioHttpInterpreter( serverInterpreterOptions ).toHttp( endpoint )
       endpoints.tail.foldLeft(toHttp(endpoints.head))( (accum, next) => accum ++ toHttp(next) )
 
   // starting the server
