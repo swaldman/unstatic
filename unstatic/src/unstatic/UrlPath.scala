@@ -15,7 +15,7 @@ object UrlPath:
         path.relativize(other.path)
       else
         throw new CannotRelativize(s"'${this}' and '${other}' do not share the same server.")
-    def reroot(rooted : UrlPath.Rooted): Abs = resolve(rooted.unroot)
+    def embedRoot(rooted : UrlPath.Rooted): Abs = resolve(rooted.unroot)
     override def toString() : String = server.toString() + path.toString().substring(1)
 
   trait PathPart[T <: PathPart[T]] extends UrlPath:
@@ -26,7 +26,7 @@ object UrlPath:
     def relativize( other : T ) : UrlPath.Rel =
       val shared = this.elements.zip(other.elements).takeWhile(tup => tup(0) == tup(1)).map(_(0))
       Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements )
-    def reroot(rooted : UrlPath.Rooted): T = resolve(rooted.unroot)
+    def embedRoot(rooted : UrlPath.Rooted): T = resolve(rooted.unroot)
     def dedottify : T =
       val dedot1 = elements.filter( _ == ".")
       if dedot1(0) == ".." then
@@ -89,6 +89,6 @@ object UrlPath:
 sealed trait UrlPath:
   def resolve(relpath: UrlPath.Rel): UrlPath
   def resolveSibling(relpath: UrlPath.Rel): UrlPath
-  def reroot(rooted : UrlPath.Rooted): UrlPath
+  def embedRoot(rooted : UrlPath.Rooted): UrlPath
 
 

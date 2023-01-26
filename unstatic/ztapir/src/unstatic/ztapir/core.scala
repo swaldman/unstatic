@@ -38,7 +38,7 @@ private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, tas
     sw.toString()
   }
   val endpoint =
-    endpointForFixedPath(siteRootedPath.reroot(site.basePath))
+    endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
       .errorOut(stringBody)
       .out(header(Header.contentType(MediaType.TextHtml)))
       .out(stringBody)

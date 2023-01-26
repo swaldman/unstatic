@@ -6,11 +6,11 @@ import unstatic.UrlPath.*
 trait Site extends StaticLocationBinding.Source:
   def serverUrl : Abs
   def basePath  : Rooted
-  def sitePath  : Abs = serverUrl.reroot(basePath)
+  def sitePath  : Abs = serverUrl.embedRoot(basePath)
 
-  def siteRoot = serverUrl.reroot( basePath )
+  def siteRoot = sitePath
 
-  def serverRootedPath( fromSiteRootedPath : Rooted ) : Rooted = basePath.reroot( fromSiteRootedPath )
+  def serverRootedPath( fromSiteRootedPath : Rooted ) : Rooted = basePath.embedRoot( fromSiteRootedPath )
   def serverRootedPath( fromSiteRootedPath : String ) : Rooted = serverRootedPath( Rooted(fromSiteRootedPath) )
 
 trait StaticResources[S <: Site] extends StaticLocationBinding.Source:
