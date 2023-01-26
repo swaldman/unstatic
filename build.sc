@@ -10,10 +10,10 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
 
   object Dependency {
     object ZTapir {
+      val Untemplate = ivy"com.mchange::untemplate:0.0.2"
       val TapirZio = ivy"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = ivy"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
     }
-
     object Test {
       //val Scalatest = ivy"org.scalatest::scalatest:3.2.15"
       val Scalacheck = ivy"org.scalacheck::scalacheck:1.17.0"
@@ -66,6 +66,7 @@ object unstatic extends UnstaticBuildModule {
         Agg(
           Dependency.ZTapir.TapirZio,
           Dependency.ZTapir.TapirZioHttpServer,
+          Dependency.ZTapir.Untemplate,
         )
     }
   }

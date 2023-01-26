@@ -15,11 +15,6 @@ import java.nio.file.Path as JPath
 
 trait ZTSite extends Site with ZTEndpointBinding.Source
 
-trait ZTStaticResources[S <: ZTSite] extends StaticResources[S] with ZTEndpointBinding.Source with StaticLocationBinding.Source:
-  // Keys are site-rooted, but endpoints are server rooted!
-  def endpointBindings: immutable.Seq[ZTEndpointBinding] =
-    locationBindings.map { case StaticLocationBinding(siteRootedPath, source) => ZTEndpointBinding.staticDirectoryServing( siteRootedPath, site, source ) }
-
 type ZTServerEndpoint = ZServerEndpoint[Any,Any] //ServerEndpoint[Any,[t] =>> ZIO[Any,String,t]]
 
 private def endpointForFixedPath( serverRootedPath : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =
