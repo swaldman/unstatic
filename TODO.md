@@ -1,1 +1,3 @@
-* Fix bad link to home in logo
+# TODO
+
+ - We're good just now! 

@@ -1,3 +1,17 @@
+// Temporary (I hope) scala-cli build info
+
+//> using publish.organization "com.mchange"
+//> using publish.name "unstatic-mill"
+//> using publish.repository "central"
+//> using publish.license "Apache-2.0"
+//> using publish.developer "swaldman|Steve Waldman|https://github.com/swaldman"
+
+//> using scala "2.13.10"
+
+
+
+
+
 package unstatic.mill
 
 import mill._
