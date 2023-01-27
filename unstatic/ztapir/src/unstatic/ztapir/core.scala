@@ -13,8 +13,6 @@ import zio.*
 
 import java.nio.file.Path as JPath
 
-trait ZTSite extends Site with ZTEndpointBinding.Source
-
 type ZTServerEndpoint = ZServerEndpoint[Any,Any] //ServerEndpoint[Any,[t] =>> ZIO[Any,String,t]]
 
 private def endpointForFixedPath( serverRootedPath : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =

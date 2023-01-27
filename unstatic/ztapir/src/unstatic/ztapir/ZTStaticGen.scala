@@ -6,7 +6,7 @@ import java.nio.file.{Files, StandardCopyOption, Path as JPath}
 import unstatic.*
 import unstatic.UrlPath.*
 
-object ZTStaticGen:
+private object ZTStaticGen:
   case class Result( generated : immutable.Seq[Rooted], ignored : immutable.Seq[Rooted], ungenerable : immutable.Seq[Rooted])
 
   private def overwriteCopyRegularFile( source : JPath, dest : JPath ) = ZIO.attempt {
