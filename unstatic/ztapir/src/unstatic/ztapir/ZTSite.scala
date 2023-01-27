@@ -55,12 +55,74 @@ object ZTSite:
           svr <- Server.serve(app)
         yield svr
       server.provide(configLayer, Server.live)
+
+    object Main:
+      case class Options( port : Int = DefaultPort, verbose : Boolean = false )
+    abstract class Main(site: ZTSite, executableName : String = "serve-site") extends ZIOAppDefault:
+      def options( args : Array[String] ) : Main.Options =
+        import scopt.OParser
+        val builder = OParser.builder[Main.Options]
+        val parser1 =
+          import builder._
+          OParser.sequence(
+            programName(executableName),
+            opt[Int]('p', "port")
+              .action((x, opts) => opts.copy(port = x))
+              .text("the port on which to serve HTTP"),
+            opt[Boolean]("verbose")
+              .action((x, opts) => opts.copy(verbose = x))
+          )
+        OParser.parse(parser1, args, Main.Options()) match {
+          case Some(opts) => opts
+          case _ => throw new Exception("Bad command line options provided.") // XXX: Better Exceptions
+        }
+      def config( options : Main.Options ) =
+        Config(
+            port = options.port,
+            serverInterpreterOptions = if options.verbose then VerboseServerInterpreterOptions else DefaltServerInterpreterOptions
+        )
+      override def run =
+        for
+          args    <- getArgs
+          options <- ZIO.attempt( options(args.toArray) )
+          _       <- ZTSite.Dynamic.serve(site)(using config(options)).debug.exitCode
+        yield ()
+
   object Static:
     case class Config( ignorePrefixes : immutable.Seq[Rooted] )
 
     given defaultConfig : Config = Config( Nil )
 
-    def generate( site : ZTSite, generateTo : JPath )( using cfg : Config ) =
+    def generate( site : ZTSite, generateTo : JPath )(using cfg : Config) =
       ZTStaticGen.generateZTSite( site, generateTo, cfg.ignorePrefixes )
+
+    object Main:
+      case class Options( generateTo : JPath = JPath.of("public"), ignorePrefixes : Seq[Rooted] = Nil )
+    abstract class Main(site: ZTSite, executableName: String = "generate-site") extends ZIOAppDefault:
+      def options( args : Array[String] ) : Main.Options =
+        import scopt.OParser
+        val builder = OParser.builder[Main.Options]
+        val parser1 =
+          import builder._
+          OParser.sequence(
+            programName(executableName),
+            opt[java.io.File]('o', "out")
+              .action((x, opts) => opts.copy(generateTo = x.toPath))
+              .valueName("<dir>")
+              .text("the output directory, into which the site will be generated"),
+            opt[Seq[String]]("ignore-prefixes")
+              .action((x, opts) => opts.copy(ignorePrefixes = x.map(Rooted.parse)))
+              .valueName("<path1>,<path2>,...")
+          )
+        OParser.parse(parser1, args, Main.Options()) match {
+          case Some(opts) => opts
+          case _ => throw new Exception("Bad command line options provided.") // XXX: Better Exceptions
+        }
+      override def run =
+        for
+          args    <- getArgs
+          options <- ZIO.attempt( options(args.toArray) )
+          _       <- ZTSite.Static.generate(site,options.generateTo)(using Config(options.ignorePrefixes.toSeq)).debug.exitCode
+        yield ()
 
 trait ZTSite extends Site with ZTEndpointBinding.Source
