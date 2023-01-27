@@ -21,11 +21,6 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
       val Scalacheck = ivy"org.scalacheck::scalacheck:1.17.0"
       val Utest      = ivy"com.lihaoyi::utest:0.8.1"
     }
-    object Mill {
-      val MillMain       = ivy"com.lihaoyi::mill-main:${MillVersion}".withDottyCompat("3.2.1")
-      val MillScalalib   = ivy"com.lihaoyi::mill-scalalib:${MillVersion}".withDottyCompat("3.2.1")
-      val UntemplateMill = ivy"com.mchange::untemplate-mill:${UntemplateVersion}".withDottyCompat("3.2.1")
-    }
   }
 
   override def scalaVersion = "3.2.1"
@@ -68,37 +63,5 @@ object unstatic extends UnstaticBuildModule {
         )
     }
   }
-  /*
-  object mill extends UnstaticBuildModule {
-    override def moduleDeps = Seq(ztapir)
-
-    override def scalaVersion = T {"2.13.10"}
-    override def scalacOptions = T {super.scalacOptions() :+ "-Ytasty-reader"}
-    override def publishName = T {"unstatic-mill"}
-
-    override def ivyDeps = T {
-      super.ivyDeps() ++
-        Agg(
-          Dependency.Mill.MillMain,
-          Dependency.Mill.MillScalalib,
-          Dependency.Mill.UntemplateMill,
-        )
-    }
-  }
-
-  override def transitiveCompileIvyDeps = T {
-    val out = super.transitiveIvyDeps()
-    println(out)
-    Agg(ivy"org.scala-lang:scala3-library_3.2.1:3.2.1")
-    println( s"out.size: ${out.size}")
-    out // a crude way to get rid of bad dependencies, wherever they are from
-      .map(dep => {
-        println(dep);
-        dep
-      })
-      .filter(dep => dep.toString.indexOf("scala3-library_2.13") < 0)
-      .filter(dep => dep.toString.indexOf("untemplate_2.13") < 0)
-  }
-  */
 }
 
