@@ -27,10 +27,10 @@ trait ZTBlog[S <: ZTSite, M] extends ZTEndpointBinding.Source:
   val site : S
   def untemplates                        : immutable.Vector[Untemplate]
   def entryInfo( template : Untemplate ) : Entry.Info
-  def renderSingle( siteLocation : SiteLocation, template : Entry.Resolved, presentationMultiple : Boolean ) : String
-  def renderLast( siteLocation : SiteLocation, num : Int )                                                   : String
-  def renderRange( siteLocation : SiteLocation, from : Instant, until : Instant )                            : String
+  def renderSingle( renderLocation : SiteLocation, template : Entry.Resolved, presentationMultiple : Boolean ) : String
+  def renderLast( renderLocation : SiteLocation, num : Int )                                                   : String
+  def renderRange( renderLocation : SiteLocation, from : Instant, until : Instant )                            : String
 
-  def renderSince( siteLocation : SiteLocation, moment : Instant ) : String = renderRange( siteLocation, moment, Instant.now )
+  def renderSince( renderLocation : SiteLocation, moment : Instant ) : String = renderRange( renderLocation, moment, Instant.now )
 
   def endpointBindings : immutable.Seq[ZTEndpointBinding]
