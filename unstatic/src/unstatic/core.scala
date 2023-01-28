@@ -15,7 +15,7 @@ trait Site extends StaticLocationBinding.Source:
 
   case class SiteLocation( siteRootedPath : Rooted, site : this.type ):
     def serverRootedPath = site.serverRootedPath(siteRootedPath)
-    def relative(using base: PageBase) = base.toRooted.relativize(siteRootedPath)
+    def relative(using base: PageBase) = base.siteRootedParentOfPage.relativize(siteRootedPath)
     def parent = this.copy(siteRootedPath=siteRootedPath.parent)
 
 
@@ -28,14 +28,6 @@ private val isWordChar = Character.isJavaIdentifierPart
 
 def linkableTitle( title : String ) =
   title.toLowerCase.filter( c => isWordChar(c) || ToDashChar(c) ).map( (c : Char) => if ToDashChar(c) then '-' else c )
-
-opaque type PageBase = Rooted // Site Rooted
-
-extension ( pb : PageBase )
-  def toRooted : Rooted = pb
-
-def toPageBase(siteRooted: Rooted)               : PageBase = siteRooted
-def toPageBase(siteLocation : Site#SiteLocation) : PageBase = siteLocation.siteRootedPath
 
 
 
