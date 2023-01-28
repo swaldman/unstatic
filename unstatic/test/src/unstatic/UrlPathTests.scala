@@ -2,6 +2,8 @@ package unstatic
 
 import utest.*
 
+import UrlPath.*
+
 object UrlPathTests extends TestSuite:
   val BaseUrl = UrlPath.Abs("https://www.mchange.com/")
   val HelloThereRel = UrlPath.Rel.fromElements("hello", "there")
@@ -17,5 +19,8 @@ object UrlPathTests extends TestSuite:
     }
     test("UrlPath.Abs.resolveSibling") {
       assert(HelloAgain == BaseUrl.resolve(UrlPath.Rel("hello/again")))
+    }
+    test("UrlPath.Rooted.relativize") {
+      assert(Rooted("/2022/01/25/grant-to-usp").relativize(Rooted("/2022/01/25/grant-to-usp/index.html")) == Rel("index.html"))
     }
   }

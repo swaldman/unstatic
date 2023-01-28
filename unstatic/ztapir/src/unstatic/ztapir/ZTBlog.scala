@@ -25,12 +25,12 @@ trait ZTBlog[S <: ZTSite, M] extends ZTEndpointBinding.Source:
   final case class Entry(mediaPathSiteRooted : Rooted, presentationMultiple : Boolean, site : S)
   type Untemplate = untemplate.Untemplate[Entry,M]
   val site : S
-  def untemplates                                                               : immutable.Vector[Untemplate]
-  def entryInfo( template : Untemplate )                                        : Entry.Info
-  def renderSingle( template : Entry.Resolved, presentationMultiple : Boolean ) : String
-  def renderLast( num : Int )                                                   : String
-  def renderRange( from : Instant, until : Instant ) : String
+  def untemplates                        : immutable.Vector[Untemplate]
+  def entryInfo( template : Untemplate ) : Entry.Info
+  def renderSingle( siteLocation : SiteLocation, template : Entry.Resolved, presentationMultiple : Boolean ) : String
+  def renderLast( siteLocation : SiteLocation, num : Int )                                                   : String
+  def renderRange( siteLocation : SiteLocation, from : Instant, until : Instant )                            : String
 
-  def renderSince( moment : Instant ) : String = renderRange( moment, Instant.now )
+  def renderSince( siteLocation : SiteLocation, moment : Instant ) : String = renderRange( siteLocation, moment, Instant.now )
 
   def endpointBindings : immutable.Seq[ZTEndpointBinding]

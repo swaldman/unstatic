@@ -10,6 +10,7 @@ private object ZTStaticGen:
   case class Result( generated : immutable.Seq[Rooted], ignored : immutable.Seq[Rooted], ungenerable : immutable.Seq[Rooted])
 
   private def overwriteCopyRegularFile( source : JPath, dest : JPath ) = ZIO.attempt {
+    println(s"overwriteCopyRegularFile( ${source}, ${dest} )")
     val destParent = dest.getParent
     Files.createDirectories(destParent)
     Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING)
@@ -17,11 +18,14 @@ private object ZTStaticGen:
   private def overwriteCopyDirectory(source : JPath, dest : JPath, ignoreRegularFile : JPath => Boolean = _ => false) = ZIO.attempt {
     import scala.jdk.StreamConverters.*
 
-    val srcPaths = Files.walk(source).toScala(List).filter(p => !Files.isDirectory(p) && ignoreRegularFile(p))
+    println(s"overwriteCopyDirectory( ${source}, ${dest} )")
+    val srcPaths = Files.walk(source).toScala(List).filter(p => !Files.isDirectory(p) && !ignoreRegularFile(p))
     val destPaths = srcPaths.map(p => dest.resolve(source.relativize(p)))
     srcPaths.zip(destPaths).foreach { case (srcPath, destPath) =>
       if (Files.isDirectory(srcPath)) then Files.createDirectories(destPath)
-      else Files.copy(srcPath, destPath, StandardCopyOption.REPLACE_EXISTING)
+      else
+        Files.createDirectories(destPath.getParent)
+        Files.copy(srcPath, destPath, StandardCopyOption.REPLACE_EXISTING)
     }
   }
   private def checkIsDir(path : JPath) = ZIO.attempt( Files.isDirectory(path) )
@@ -41,6 +45,8 @@ private object ZTStaticGen:
     val (ungenerableEndpointBindings, generableEndpointBindings)
       = unignoredEndpointBindings.partition( ep => ep.mbGenerator.isEmpty )
 
+    println(s"unignoredLocationBindings: " + unignoredLocationBindings.mkString(", "))
+
     val noExceptionResult =
       val generated = generableEndpointBindings.map( _.siteRootedPath )
       val ignored = ignoredEndpointBindings.map( _.siteRootedPath ) ++ ignoredLocationBindings.map( _.siteRootedPath )
@@ -56,17 +62,23 @@ private object ZTStaticGen:
     }
     def generateLocation( siteRootedPath : Rooted, source : JPath ) : Task[Unit] =
       for
-        destPath    <- findDestPathFor(siteRootedPath)
+        destPath    <- findDestPathFor(siteRootedPath).debug("destPath")
         sourceIsDir <- checkIsDir(source)
         _           <- if sourceIsDir then overwriteCopyDirectory( source, destPath ) else overwriteCopyRegularFile( source, destPath )
       yield ()
+
     def writeStringFor( siteRootedPath : Rooted, contents : String, codec : scala.io.Codec = scala.io.Codec.UTF8 ) : Task[Unit] =
       for
-        destPath <- findDestPathFor(siteRootedPath)
-        _        <- ZIO.attempt( Files.writeString(destPath, contents, codec.charSet) )
+        destParent <- findDestPathFor(siteRootedPath.parent) // will throw if root
+        destPath   <- findDestPathFor(siteRootedPath).debug("dest path")
+        _          <- ZIO.attempt( if !Files.exists(destParent) then Files.createDirectories(destParent) )
+        _          <- ZIO.attempt( Files.writeString(destPath, contents, codec.charSet) )
       yield()
 
     val locationTasks = unignoredLocationBindings.map( slb => generateLocation(slb.siteRootedPath, slb.source) )
+
+    println(s"locationTasks: " + locationTasks.mkString(", "))
+
     val endpointTasks = generableEndpointBindings.map { case generable: ZTEndpointBinding =>
       for
         contents <- generable.mbGenerator.get // we've already verified this is non-empty, see above

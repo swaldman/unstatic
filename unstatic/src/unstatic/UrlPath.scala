@@ -19,38 +19,50 @@ object UrlPath:
     override def toString() : String = server.toString() + path.toString().substring(1)
 
   trait PathPart[T <: PathPart[T]] extends UrlPath:
+    self : T =>
     def elements: Vector[String]
     private[unstatic] def withElements( elements : Vector[String] ) : T
+    private[unstatic] def aboveParent : T
     def resolve(relpath: Rel): T = this.withElements( this.elements ++ relpath.elements )
     def resolveSibling(relpath: Rel): T = this.withElements( this.elements.init ++ relpath.elements ) // will throw if we're empty!
     def relativize( other : T ) : UrlPath.Rel =
       val shared = this.elements.zip(other.elements).takeWhile(tup => tup(0) == tup(1)).map(_(0))
-      Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements )
+      Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements.drop(shared.length) )
+    def relativizeSibling( other : T ) : UrlPath.Rel = this.parent.relativize(other)
     def embedRoot(rooted : UrlPath.Rooted): T = resolve(rooted.unroot)
-    def dedottify : T =
+    def dedottify : T = // XXX: does this correctly handle multiple the multiple ../../../ kind of case?!?
       val dedot1 = elements.filter( _ == ".")
       if dedot1(0) == ".." then
         throw new CannotDedottify(s"Can't dedottify '${this}', can't resolve initial path element.")
       val offset = "DUMMY" +: dedot1
       val offsetSnipped = dedot1.zip(offset).filter( tup => tup(0) != ".." ).map( tup => tup(1) ).filter( _ != ".." )
       this.withElements( offsetSnipped.tail )
-
+    def parent : T = // XXX: What if this would take a rooted directory above its root?
+      if elements.nonEmpty then
+        if hasTerminalDotDir then this.withElements( elements :+ ".." ) else this.withElements( elements.init )
+      else
+        aboveParent
+    def hasTerminalDotDir : Boolean =
+      val last = elements.last
+      last == "." || last == ".."
     override def toString() : String = elements.mkString("/")
   end PathPart
 
   object Rooted:
-    private def preparse( path : String ) : Vector[String] =
-      if path.isEmpty || path(0) != '/' then
+    private def preparse( path : String, strict : Boolean ) : Vector[String] =
+      if strict && (path.isEmpty || path(0) != '/') then
         throw new BadPathException(s"Putative rooted path '${path}' must begin with '/'.")
       path.split("""\/+""").filter(_.nonEmpty).to(Vector)
 
     val root = Rooted(Vector.empty)
 
     def fromElements( elements : String* ) : Rooted = Rooted( elements.filter( _.nonEmpty ).to(Vector) )
-    def parse( path : String )             : Rooted = Rooted( preparse(path) )
+    def parseAndRoot( path : String)       : Rooted = Rooted( preparse(path, false) )
+    def parse( path : String )             : Rooted = Rooted( preparse(path, true) )
     def apply( path : String )             : Rooted = Rooted.parse(path)
   case class Rooted private[unstatic] ( val elements : Vector[String] ) extends PathPart[Rooted]:
     private[unstatic] def withElements( elements : Vector[String] ) : Rooted = this.copy(elements = elements)
+    private[unstatic] def aboveParent : Rooted = throw new Exception("Attempted to take the parent of a root path.") //XXX: Better Exceptions
     def unroot : Rel = Rel( this.elements )
     def isPrefixOf(other : Rooted) =
       other.elements.length >= this.elements.length && (0 until this.elements.length).forall( i => this.elements(i) == other.elements(i))
@@ -67,6 +79,10 @@ object UrlPath:
     def fromElements( elements : String* ) : Rel = Rel( elements.filter( _.nonEmpty ).to(Vector) )
   case class Rel private[unstatic](elements: Vector[String]) extends PathPart[Rel]:
     private[unstatic] def withElements( elements : Vector[String] ) : Rel = this.copy(elements = elements)
+    private[unstatic] def aboveParent : Rel = this.withElements( elements :+ "..")
+    override def parent : Rel =
+      if elements.forall( _ == ".." ) then this.withElements( this.elements :+ ".." ) else super.parent
+
 
   // TODO: Better validation that "absolute" paths are
   //       valid absolute URLs

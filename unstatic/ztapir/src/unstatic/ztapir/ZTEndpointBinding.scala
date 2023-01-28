@@ -3,7 +3,9 @@ package unstatic.ztapir
 import scala.collection.*
 import java.nio.file.Path as JPath
 
+import unstatic.*
 import unstatic.UrlPath.*
+
 import zio.*
 
 /**
@@ -20,13 +22,19 @@ object ZTEndpointBinding:
   def staticDirectoryServing( siteRootedPath: Rooted, site: ZTSite, dir : JPath ) : ZTEndpointBinding =
     ZTEndpointBinding(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), None)
 
+  def staticDirectoryServing(siteLocation: SiteLocation, site: ZTSite, dir: JPath): ZTEndpointBinding =
+    staticDirectoryServing(siteLocation.siteRootedPath, site, dir)
+
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String] ) : ZTEndpointBinding =
     ZTEndpointBinding( siteRootedPath, publicReadOnlyHtmlEndpoint( siteRootedPath, site, task ), Some(ZTLogic.UnitString( task )) )
+
+  def publicReadOnlyHtml(siteLocation: SiteLocation, site: ZTSite, task: zio.Task[String]): ZTEndpointBinding =
+    publicReadOnlyHtml(siteLocation.siteRootedPath, site, task)
 
 case class ZTEndpointBinding( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, mbLogic : Option[ZTLogic[_,_]] ):
   lazy val mbGenerator : Option[Task[String]] =
     endpointStaticallyGenerableFilePath(ztServerEndpoint).flatMap { _ =>
       mbLogic match
-      case Some(us : ZTLogic.UnitString) => Some(us.task)
-      case _                             => None
+        case Some(us : ZTLogic.UnitString) => Some(us.task)
+        case _                             => None
     }

@@ -23,6 +23,18 @@ private val isWordChar = Character.isJavaIdentifierPart
 def linkableTitle( title : String ) =
   title.toLowerCase.filter( c => isWordChar(c) || ToDashChar(c) ).map( (c : Char) => if ToDashChar(c) then '-' else c )
 
+opaque type PageBase = Rooted // Site Rooted
+
+extension ( pb : PageBase )
+  def toRooted : Rooted = pb
+
+def toPageBase(siteRooted: Rooted)          : PageBase = siteRooted
+def toPageBase(siteLocation : SiteLocation) : PageBase = siteLocation.siteRootedPath
+
+case class SiteLocation( siteRootedPath : Rooted, site : Site ):
+  def serverRootedPath = site.serverRootedPath(siteRootedPath)
+  def relative(using base: PageBase) = base.toRooted.relativize(siteRootedPath)
+  def parent = SiteLocation( siteRootedPath.parent, site )
 
 
 
