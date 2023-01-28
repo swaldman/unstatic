@@ -23,8 +23,9 @@ trait ZTBlog[S <: ZTSite, M] extends ZTEndpointBinding.Source:
       given Ordering[Resolved] = Ordering.by( (r : Resolved) => (r.info.pubDate, r.untemplate.UntemplatePackage, r.untemplate.UntemplateName) ).reverse
     final case class Resolved( untemplate : ZTBlog.this.Untemplate, info : Entry.Info )
   final case class Entry(mediaPathSiteRooted : Rooted, presentationMultiple : Boolean, site : S)
-  type Untemplate = untemplate.Untemplate[Entry,M]
   val site : S
+  type SiteLocation = site.SiteLocation
+  type Untemplate = untemplate.Untemplate[Entry,M]
   def untemplates                        : immutable.Vector[Untemplate]
   def entryInfo( template : Untemplate ) : Entry.Info
   def renderSingle( renderLocation : SiteLocation, template : Entry.Resolved, presentationMultiple : Boolean ) : String

@@ -1,3 +1,4 @@
 # TODO
 
- - We're good just now! 
+ - Fix dedottify and parent in UrlPath, see comments
+   they are currently fragile.

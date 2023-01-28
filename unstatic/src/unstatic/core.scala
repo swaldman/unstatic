@@ -13,6 +13,12 @@ trait Site extends StaticLocationBinding.Source:
   def serverRootedPath( fromSiteRootedPath : Rooted ) : Rooted = basePath.embedRoot( fromSiteRootedPath )
   def serverRootedPath( fromSiteRootedPath : String ) : Rooted = serverRootedPath( Rooted(fromSiteRootedPath) )
 
+  case class SiteLocation( siteRootedPath : Rooted, site : this.type ):
+    def serverRootedPath = site.serverRootedPath(siteRootedPath)
+    def relative(using base: PageBase) = base.toRooted.relativize(siteRootedPath)
+    def parent = this.copy(siteRootedPath=siteRootedPath.parent)
+
+
 trait StaticResources[S <: Site] extends StaticLocationBinding.Source:
   val site : S
   def locationBindings : immutable.Seq[StaticLocationBinding]
@@ -28,13 +34,9 @@ opaque type PageBase = Rooted // Site Rooted
 extension ( pb : PageBase )
   def toRooted : Rooted = pb
 
-def toPageBase(siteRooted: Rooted)          : PageBase = siteRooted
-def toPageBase(siteLocation : SiteLocation) : PageBase = siteLocation.siteRootedPath
+def toPageBase(siteRooted: Rooted)               : PageBase = siteRooted
+def toPageBase(siteLocation : Site#SiteLocation) : PageBase = siteLocation.siteRootedPath
 
-case class SiteLocation( siteRootedPath : Rooted, site : Site ):
-  def serverRootedPath = site.serverRootedPath(siteRootedPath)
-  def relative(using base: PageBase) = base.toRooted.relativize(siteRootedPath)
-  def parent = SiteLocation( siteRootedPath.parent, site )
 
 
 

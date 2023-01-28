@@ -22,13 +22,13 @@ object ZTEndpointBinding:
   def staticDirectoryServing( siteRootedPath: Rooted, site: ZTSite, dir : JPath ) : ZTEndpointBinding =
     ZTEndpointBinding(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), None)
 
-  def staticDirectoryServing(siteLocation: SiteLocation, site: ZTSite, dir: JPath): ZTEndpointBinding =
+  def staticDirectoryServing(siteLocation: Site#SiteLocation, site: ZTSite, dir: JPath): ZTEndpointBinding =
     staticDirectoryServing(siteLocation.siteRootedPath, site, dir)
 
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String] ) : ZTEndpointBinding =
     ZTEndpointBinding( siteRootedPath, publicReadOnlyHtmlEndpoint( siteRootedPath, site, task ), Some(ZTLogic.UnitString( task )) )
 
-  def publicReadOnlyHtml(siteLocation: SiteLocation, site: ZTSite, task: zio.Task[String]): ZTEndpointBinding =
+  def publicReadOnlyHtml(siteLocation: Site#SiteLocation, site: ZTSite, task: zio.Task[String]): ZTEndpointBinding =
     publicReadOnlyHtml(siteLocation.siteRootedPath, site, task)
 
 case class ZTEndpointBinding( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, mbLogic : Option[ZTLogic[_,_]] ):
