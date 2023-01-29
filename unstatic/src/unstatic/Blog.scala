@@ -18,6 +18,7 @@ trait Blog:
 
   val site : Site
   type SiteLocation = site.SiteLocation
+  val  SiteLocation = site.SiteLocation
 
   val frontPage           : SiteLocation
   val maxFrontPageEntries : Int

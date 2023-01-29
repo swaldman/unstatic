@@ -7,7 +7,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
   val UnstaticVersion   = "0.0.1-SNAPSHOT"
 
   object Dependency {
-    val UntemplateVersion = "0.0.2"
+    val UntemplateVersion = "0.0.3-SNAPSHOT"
     val TapirVersion      = "1.2.6"
     val MillVersion       = "0.10.10"
 
@@ -26,6 +26,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
   }
 
   override def scalaVersion = "3.2.1"
+  override def scalacOptions = Seq("-explain")
   override def ammoniteVersion = "2.5.6" // supports Scala 3.2.1
   // override def scalacOptions = T{ Seq("-explain") }
 

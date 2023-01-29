@@ -1,10 +1,8 @@
 package unstatic.ztapir.simple
 
 import java.time.Instant
-
 import scala.collection.*
-
-import unstatic.*
+import unstatic.{Site, *}
 import unstatic.UrlPath.*
 import unstatic.ztapir.*
 
@@ -19,7 +17,7 @@ object SimpleBlog:
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from SiteRoot
     )
-    final case class Input(renderPath : SimpleBlog#SiteLocation, mediaPath : SimpleBlog#SiteLocation, presentationMultiple : Boolean)
+    final case class Input(renderPath : ZTSite#SiteLocation, mediaPath : ZTSite#SiteLocation, presentationMultiple : Boolean)
 trait SimpleBlog extends ZTBlog:
   import SimpleBlog.*
 
@@ -28,7 +26,7 @@ trait SimpleBlog extends ZTBlog:
   type EntryMetadata  = Nothing
 
   /**
-   * Usually reverse-chronological!
+   * Reverse-chronological!
    */
   given entryOrdering : Ordering[EntryResolved] =
     Ordering.by( (er : EntryResolved) => (er.entryInfo.pubDate, er.entryUntemplate.UntemplatePackage, er.entryUntemplate.UntemplateName) ).reverse
@@ -39,45 +37,28 @@ trait SimpleBlog extends ZTBlog:
 
   def entryUntemplates : immutable.Set[EntryUntemplate]
 
-  def entryInfo( template : EntryUntemplate ) : EntryInfo = ???
+  def mediaPathPermalink( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink
 
-  def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput
+  def entryInfo( template : EntryUntemplate ) : EntryInfo =
+    import Attribute.Key.*
 
-  def permalink( resolved : EntryResolved ) : SiteLocation
+    val checkable : Attribute.Checkable = Attribute.Checkable.from(template)
+    val mbTitle     = checkable.check(`Title`)
+    val authors     = checkable.check(`Author`).getOrElse(Nil)
+    val tags        = checkable.check(`Tag`).getOrElse(Nil)
+    val pubDate     = checkable.check(`PubDate`).getOrElse( throw missingAttribute( template, `PubDate`) )
+    val contentType = findContentType( checkable, template )
+
+    val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( checkable, template )
+
+    Entry.Info(mbTitle, authors, tags, pubDate, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+
+
+  def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput =
+    Entry.Input( renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), presentationMultiple )
+
+  def permalink( resolved : EntryResolved ) : SiteLocation = SiteLocation( resolved.entryInfo.permalinkPathSiteRooted, site )
 
   def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String
 
   def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String
-
-  /*
-    def entryInfo( untemplate : this.Untemplate ) =
-      val attrsLc = untemplate.UntemplateAttributes.map { case (k, v) => (k.toLowerCase, v) }
-      def getMaybeMultiple(keySingular : String) : Seq[String] =
-        attrsLc.get(keySingular + "s") match
-          case Some(seq: Seq[_]) => seq.map( _.toString ) // to avoid unchecked Seq[String] match
-          case Some(str: String) => str.split(",").map(_.trim).toSeq
-          case Some( other ) => throw new D24nSite.Exception(s"Unexpected '${keySingular}s' type: ${other}")
-          case None =>
-            attrsLc.get(keySingular) match
-              case Some(str: String) => Seq(str)
-              case Some( other ) => throw new D24nSite.Exception(s"Unexpected '${keySingular}' type: ${other}")
-              case None => Nil
-
-
-
-      val mbTitle = attrsLc.get("title").map( _.toString )
-      val authors = getMaybeMultiple("author")
-      val tags    = getMaybeMultiple("tag")
-      val pubDate =
-        attrsLc.get("pubdate") orElse attrsLc.get("publicationdate") match
-          case Some( instant : Instant )  => instant
-          case Some( timestamp : String ) => parseTimestamp( timestamp.trim )
-          case Some( other )              => throw new D24nSite.Exception(s"Unexpected publication date format: ${other}")
-          case None                       => throw new D24nSite.Exception(s"PubDate or PublicationDate attribute required, not found.")
-      val contentType =
-        (attrsLc.get("content-type").map( _.toString ) orElse contentTypeFromSuffix(untemplate.UntemplateName)).getOrElse("text/plain")
-      val mbPermalink = attrsLc.get("permalink").map( _.toString )
-      val mbLinkName = attrsLc.get("linkname").map( _.toString )
-      val (mediaPath, permalinkSiteRootedPath) = mediaPathPermalink(mbPermalink, pubDate, mbTitle.getOrElse("Untitled Post"), mbLinkName)
-      Entry.Info(mbTitle, authors, tags, pubDate, contentType, mediaPath, permalinkSiteRootedPath)
-  */

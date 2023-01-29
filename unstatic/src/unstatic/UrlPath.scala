@@ -25,6 +25,8 @@ object UrlPath:
     private[UrlPath] def withElements( elements : Vector[String] ) : T
     def resolve(relpath: Rel): T = this.withElements( this.elements ++ relpath.elements )
     def resolveSibling(relpath: Rel): T = this.withElements( this.elements.init ++ relpath.elements ) // will throw if we're empty!
+    def resolve(relpath : String) : T = this.resolve(Rel(relpath))
+    def resolveSibling(relpath : String) : T = this.resolveSibling(Rel(relpath))
     def relativize( other : T ) : UrlPath.Rel =
       val shared = this.elements.zip(other.elements).takeWhile(tup => tup(0) == tup(1)).map(_(0))
       Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements.drop(shared.length) )

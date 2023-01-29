@@ -9,6 +9,13 @@ import java.time.temporal.ChronoField
 import unstatic.*
 import unstatic.UrlPath.*
 
+def findContentType( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : String =
+  import Attribute.Key.*
+  (checkable.check(`Content-Type`) orElse contentTypeFromSuffix(ut.UntemplateName)).getOrElse("text/plain")
+
+def missingAttribute( ut : untemplate.Untemplate[?,?], key : Attribute.Key[?] ) : unstatic.MissingAttribute =
+  new MissingAttribute(s"${ut} is missing required attribute '${key}'.")
+
 def parseTimestamp(timestamp: String): Try[Instant] =
   parseTimestampIsoInstant(timestamp) orElse parseTimestampFromIsoLocalDate(timestamp)
 
@@ -19,25 +26,6 @@ def contentTypeFromSuffix( name : String ) : Option[String] =
     ContentTypeBySuffix.get(suffix)
   else
     None
-
-object MediaPathPermalink:
-  def yearMonthDayName(pubDate : Instant, title : String, mbLinkName : Option[String] ) : MediaPathPermalink =
-    val zoned = pubDate.atZone(ZoneId.systemDefault())
-    val year  = zoned.get(ChronoField.YEAR)
-    val month = zoned.get(ChronoField.MONTH_OF_YEAR)
-    val day   = zoned.get(ChronoField.DAY_OF_MONTH)
-    val linkName = mbLinkName.getOrElse(linkableTitle(title))
-    ensureNoFilePathChars(linkName)
-    val mediaPath = f"/$year%d/$month%02d/$day%02d/${linkName}%s/"
-    MediaPathPermalink( Rooted(mediaPath), Rooted(mediaPath + "index.html") )
-
-  def givenPermalinkInMediaDir(permalinkSiteRooted : String) : MediaPathPermalink =
-    val pl = Rooted.parseAndRoot(permalinkSiteRooted)
-    MediaPathPermalink( pl.parent, pl )
-
-  def givenMediaDirAndPermalink(mediaDirSiteRooted : String, permalinkSiteRooted: String): MediaPathPermalink =
-    MediaPathPermalink(Rooted.parseAndRoot(mediaDirSiteRooted), Rooted.parseAndRoot(permalinkSiteRooted))
-case class MediaPathPermalink( mediaPathSiteRooted : Rooted, permalinkSiteRooted : Rooted )
 
 // things that render fragments to output, usually HTML
 type ContentRenderer =
