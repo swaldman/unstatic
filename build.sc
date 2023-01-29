@@ -11,9 +11,11 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
     val TapirVersion      = "1.2.6"
     val MillVersion       = "0.10.10"
 
+    val Untemplate         = ivy"com.mchange::untemplate:${UntemplateVersion}" // mill.scalalib.Dep
+
     // it'd save some repetition if these could be Products. maybe a fun macro project?
     object ZTapir {
-      val Untemplate         = ivy"com.mchange::untemplate:${UntemplateVersion}" // mill.scalalib.Dep
+      val Untemplate         = Dependency.this.Untemplate
       val TapirZio           = ivy"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = ivy"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
     }
@@ -46,6 +48,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
 
 object unstatic extends UnstaticBuildModule {
   override def publishName = T{"unstatic"}
+  override def ivyDeps = T{ super.ivyDeps() ++ Agg(Dependency.Untemplate) }
 
   object test extends Tests with TestModule.Utest {
     override def scalaVersion = T{unstatic.scalaVersion()}
