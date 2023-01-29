@@ -17,8 +17,9 @@ trait Blog:
   given entryOrdering : Ordering[EntryResolved]
 
   val site : Site
-  type SiteLocation = site.SiteLocation
-  val  SiteLocation = site.SiteLocation
+
+  type     SiteLocation = site.SiteLocation
+  lazy val SiteLocation = site.SiteLocation // better be lazy or we'll fail on construction!
 
   val frontPage           : SiteLocation
   val maxFrontPageEntries : Int

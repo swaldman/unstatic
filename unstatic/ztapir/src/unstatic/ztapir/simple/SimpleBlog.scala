@@ -6,7 +6,7 @@ import unstatic.{Site, *}
 import unstatic.UrlPath.*
 import unstatic.ztapir.*
 
-object SimpleBlog:
+trait SimpleBlog extends ZTBlog:
   object Entry:
     final case class Info (
       mbTitle : Option[String],
@@ -17,14 +17,14 @@ object SimpleBlog:
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from SiteRoot
     )
-    final case class Input(renderPath : ZTSite#SiteLocation, mediaPath : ZTSite#SiteLocation, presentationMultiple : Boolean)
+    final case class Input(renderPath : SiteLocation, mediaPath : SiteLocation, presentationMultiple : Boolean)
+  end Entry
   object Layout:
     object Input:
-      case class Entry( renderLocation : ZTSite#SiteLocation, articleContentHtml : String, mbTitle : Option[String], authors : Seq[String], tags : Seq[String], pubDate : Instant, permalinkLocation : ZTSite#SiteLocation, presentationMultiple : Boolean )
-      case class Page( renderLocation : ZTSite#SiteLocation, mainContentHtml : String )
-
-trait SimpleBlog extends ZTBlog:
-  import SimpleBlog.*
+      case class Entry( renderLocation : SiteLocation, articleContentHtml : String, mbTitle : Option[String], authors : Seq[String], tags : Seq[String], pubDate : Instant, permalinkLocation : ZTSite#SiteLocation, presentationMultiple : Boolean )
+      case class Page( renderLocation : SiteLocation, mainContentHtml : String )
+    end Input
+  end Layout
 
   type EntryInfo      = Entry.Info
   type EntryInput     = Entry.Input
@@ -36,7 +36,7 @@ trait SimpleBlog extends ZTBlog:
   given entryOrdering : Ordering[EntryResolved] =
     Ordering.by( (er : EntryResolved) => (er.entryInfo.pubDate, er.entryUntemplate.UntemplatePackage, er.entryUntemplate.UntemplateName) ).reverse
 
-  val site                : Site
+  val site                : Site // the type is Blog.this.Site, narrowed to ZTSite by ZTBlog
   val frontPage           : SiteLocation
   val maxFrontPageEntries : Int
 
