@@ -125,4 +125,9 @@ object ZTSite:
           _       <- ZTSite.Static.generate(site,options.generateTo)(using Config(options.ignorePrefixes.toSeq)).debug.exitCode
         yield ()
 
+  trait Composite extends ZTSite with Site.Composite:
+    def endpointBindingSources : immutable.Seq[ZTEndpointBinding.Source]
+    def endpointBindings : immutable.Seq[ZTEndpointBinding] = endpointBindingSources.flatMap( _.endpointBindings )
+  end Composite
+
 trait ZTSite extends Site with ZTEndpointBinding.Source
