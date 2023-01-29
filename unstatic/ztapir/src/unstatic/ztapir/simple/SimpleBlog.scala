@@ -18,6 +18,11 @@ object SimpleBlog:
       permalinkPathSiteRooted : Rooted // from SiteRoot
     )
     final case class Input(renderPath : ZTSite#SiteLocation, mediaPath : ZTSite#SiteLocation, presentationMultiple : Boolean)
+  object Layout:
+    object Input:
+      case class Entry( renderLocation : ZTSite#SiteLocation, articleContentHtml : String, mbTitle : Option[String], authors : Seq[String], tags : Seq[String], pubDate : Instant, permalinkLocation : ZTSite#SiteLocation, presentationMultiple : Boolean )
+      case class Page( renderLocation : ZTSite#SiteLocation, mainContentHtml : String )
+
 trait SimpleBlog extends ZTBlog:
   import SimpleBlog.*
 
@@ -35,6 +40,9 @@ trait SimpleBlog extends ZTBlog:
   val frontPage           : SiteLocation
   val maxFrontPageEntries : Int
 
+  /**
+   * Filter the index of your untemplates for the blog's entries
+   */
   def entryUntemplates : immutable.Set[EntryUntemplate]
 
   def mediaPathPermalink( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink
@@ -52,13 +60,47 @@ trait SimpleBlog extends ZTBlog:
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( checkable, template )
 
     Entry.Info(mbTitle, authors, tags, pubDate, contentType, mediaPathSiteRooted, permalinkSiteRooted)
-
+  end entryInfo
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput =
     Entry.Input( renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), presentationMultiple )
 
   def permalink( resolved : EntryResolved ) : SiteLocation = SiteLocation( resolved.entryInfo.permalinkPathSiteRooted, site )
 
-  def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String
+  /**
+   * Lays out only the entry, the fragment which will later become the main content of the page
+   */
+  def layoutEntry( input : Layout.Input.Entry ) : String
 
-  def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String
+  def entrySeparator : String
+
+  def layoutPage( input : Layout.Input.Page ) : String
+
+  def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : String =
+    val renderer = ContentRendererForContentType(resolved.entryInfo.contentType)
+    val ei = entryInput( renderLocation, resolved, presentationMultiple )
+    val result = resolved.entryUntemplate(ei)
+    val renderResult = renderer(result)
+    val info = resolved.entryInfo
+    val layoutEntryInput = Layout.Input.Entry(renderLocation, renderResult.text, info.mbTitle, info.authors, info.tags, info.pubDate, SiteLocation(info.permalinkPathSiteRooted,site), presentationMultiple )
+    layoutEntry( layoutEntryInput )
+
+  def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String =
+    val entry = renderSingleFragment(renderLocation, resolved, false)
+    val layoutPageInput = Layout.Input.Page(renderLocation, entry)
+    layoutPage( layoutPageInput )
+
+  def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String =
+    val fragmentTexts = resolveds.map(resolved => renderSingleFragment(renderLocation, resolved, true))
+    val unifiedFragmentTexts = fragmentTexts.mkString(entrySeparator)
+    val layoutPageInput = Layout.Input.Page(renderLocation, unifiedFragmentTexts)
+    layoutPage( layoutPageInput )
+
+  def renderRange(renderLocation: SiteLocation, from: Instant, until: Instant): String =
+    val ordering = summon[Ordering[Instant]]
+    val rs = entriesResolved.filter(r => ordering.gteq(from, r.entryInfo.pubDate) && ordering.lt(r.entryInfo.pubDate, until))
+    renderMultiple(renderLocation, rs.toVector)
+
+  def renderSince(renderLocation: SiteLocation, from: Instant): String =
+    renderRange( renderLocation, from, Instant.now)
+

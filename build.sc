@@ -26,7 +26,6 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
   }
 
   override def scalaVersion = "3.2.1"
-  override def scalacOptions = Seq("-explain")
   override def ammoniteVersion = "2.5.6" // supports Scala 3.2.1
   // override def scalacOptions = T{ Seq("-explain") }
 
