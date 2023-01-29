@@ -108,6 +108,13 @@ object UrlPath:
   def dotDotHead( elements : Vector[String] ) : Boolean =
     elements.headOption == SomeDotDot
 
+  /**
+   *  Will fully dedottify paths that don't escape the starting level of the path.
+   *
+   *  Paths that do escape the starting level get ".." prepended.
+   *
+   *  There are no dots beyond the prefix of zero or more ".." elements.
+   */
   private[UrlPath] def _dedottifySuffix( elements : Vector[String] ): Vector[String] =
     val dedot1 = elements.filter(_ != ".")
     if (dedot1.nonEmpty) then

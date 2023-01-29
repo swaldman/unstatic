@@ -10,7 +10,7 @@ private object ZTStaticGen:
   case class Result( generated : immutable.Seq[Rooted], ignored : immutable.Seq[Rooted], ungenerable : immutable.Seq[Rooted])
 
   private def overwriteCopyRegularFile( source : JPath, dest : JPath ) = ZIO.attempt {
-    println(s"overwriteCopyRegularFile( ${source}, ${dest} )")
+    // println(s"overwriteCopyRegularFile( ${source}, ${dest} )")
     val destParent = dest.getParent
     Files.createDirectories(destParent)
     Files.copy(source, dest, StandardCopyOption.REPLACE_EXISTING)
@@ -18,7 +18,7 @@ private object ZTStaticGen:
   private def overwriteCopyDirectory(source : JPath, dest : JPath, ignoreRegularFile : JPath => Boolean = _ => false) = ZIO.attempt {
     import scala.jdk.StreamConverters.*
 
-    println(s"overwriteCopyDirectory( ${source}, ${dest} )")
+    // println(s"overwriteCopyDirectory( ${source}, ${dest} )")
     val srcPaths = Files.walk(source).toScala(List).filter(p => !Files.isDirectory(p) && !ignoreRegularFile(p))
     val destPaths = srcPaths.map(p => dest.resolve(source.relativize(p)))
     srcPaths.zip(destPaths).foreach { case (srcPath, destPath) =>
@@ -45,12 +45,13 @@ private object ZTStaticGen:
     val (ungenerableEndpointBindings, generableEndpointBindings)
       = unignoredEndpointBindings.partition( ep => ep.mbGenerator.isEmpty )
 
-    println(s"unignoredLocationBindings: " + unignoredLocationBindings.mkString(", "))
+    // println(s"unignoredLocationBindings: " + unignoredLocationBindings.mkString(", "))
 
     val noExceptionResult =
-      val generated = generableEndpointBindings.map( _.siteRootedPath )
+      val generated = generableEndpointBindings.map( _.siteRootedPath ) ++ unignoredLocationBindings.map( _.siteRootedPath )
       val ignored = ignoredEndpointBindings.map( _.siteRootedPath ) ++ ignoredLocationBindings.map( _.siteRootedPath )
-      val ungenerable = ungenerableEndpointBindings.map( _.siteRootedPath ).filter( siteRootedPath => !ignored.contains(siteRootedPath) )
+      val unignoredLocationSiteRootedPaths = unignoredLocationBindings.map( _.siteRootedPath ).toSet
+      val ungenerable = ungenerableEndpointBindings.map( _.siteRootedPath ).filter( siteRootedPath => !unignoredLocationSiteRootedPaths.contains(siteRootedPath) )
       Result( generated, ignored, ungenerable )
 
     def findDestPathFor(siteRootedPath: Rooted) = ZIO.attempt {
@@ -62,7 +63,7 @@ private object ZTStaticGen:
     }
     def generateLocation( siteRootedPath : Rooted, source : JPath ) : Task[Unit] =
       for
-        destPath    <- findDestPathFor(siteRootedPath).debug("destPath")
+        destPath    <- findDestPathFor(siteRootedPath)//.debug("destPath")
         sourceIsDir <- checkIsDir(source)
         _           <- if sourceIsDir then overwriteCopyDirectory( source, destPath ) else overwriteCopyRegularFile( source, destPath )
       yield ()
@@ -70,14 +71,14 @@ private object ZTStaticGen:
     def writeStringFor( siteRootedPath : Rooted, contents : String, codec : scala.io.Codec = scala.io.Codec.UTF8 ) : Task[Unit] =
       for
         destParent <- findDestPathFor(siteRootedPath.parent) // will throw if root
-        destPath   <- findDestPathFor(siteRootedPath).debug("dest path")
+        destPath   <- findDestPathFor(siteRootedPath)//.debug("dest path")
         _          <- ZIO.attempt( if !Files.exists(destParent) then Files.createDirectories(destParent) )
         _          <- ZIO.attempt( Files.writeString(destPath, contents, codec.charSet) )
       yield()
 
     val locationTasks = unignoredLocationBindings.map( slb => generateLocation(slb.siteRootedPath, slb.source) )
 
-    println(s"locationTasks: " + locationTasks.mkString(", "))
+    // println(s"locationTasks: " + locationTasks.mkString(", "))
 
     val endpointTasks = generableEndpointBindings.map { case generable: ZTEndpointBinding =>
       for
