@@ -1,7 +1,6 @@
 # TODO
 
  - Better exceptions, search XXX and TODO
- - Fix bad ignore logic in ZTStaticGen
  - Add warnings in ZTStaticGen for eg root paths, 
    generableTo links that seem dir like, etc?
  - Speculation: Can we use Mastodon/Fediverse for a comments
