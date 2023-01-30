@@ -12,6 +12,8 @@ import unstatic.UrlPath.*
 object MediaPathPermalink:
   import Attribute.Key.*
 
+  type Generator = (Attribute.Checkable, untemplate.Untemplate[?,?]) => MediaPathPermalink
+
   def fullyQualifiedNameDir( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink =
     val dirSitePath = ut.UntemplateFullyQualifiedName.map( c => if c == '.' then '/' else c )
     val mediaPath = Rooted.parseAndRoot(dirSitePath)
@@ -25,11 +27,17 @@ object MediaPathPermalink:
     ensureNoFilePathChars(linkName)
     yearMonthDayNameDir(pubDate, linkName)
 
+  def givenPermalinkInMediaDirOrElse( backstop : Generator ) : Generator = { (checkable, ut) =>
+    mbGivenPermalinkInMediaDir(checkable, ut).getOrElse( backstop(checkable, ut) )
+  }
+
   def givenPermalinkInMediaDir( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink =
-    val permalink = checkable.check(`Permalink`).getOrElse {
+    mbGivenPermalinkInMediaDir( checkable, ut ).getOrElse {
       throw missingAttribute(ut, `Permalink`)
     }
-    givenPermalinkInMediaDir( permalink )
+
+  def mbGivenPermalinkInMediaDir( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : Option[MediaPathPermalink] =
+    checkable.check(`Permalink`).map(givenPermalinkInMediaDir)
 
   def givenMediaDirAndPermalink(mediaDirSiteRooted : String, permalinkSiteRooted: String): MediaPathPermalink =
     MediaPathPermalink(Rooted.parseAndRoot(mediaDirSiteRooted), Rooted.parseAndRoot(permalinkSiteRooted))
