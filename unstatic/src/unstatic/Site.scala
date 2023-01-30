@@ -5,9 +5,9 @@ import unstatic.UrlPath.*
 
 object Site:
   trait Composite extends Site:
-    def staticLocationBindingSources : immutable.Seq[StaticLocationBinding.Source]
+    def locationBindingSources : immutable.Seq[StaticLocationBinding.Source]
 
-    def locationBindings : immutable.Seq[StaticLocationBinding] = staticLocationBindingSources.flatMap( _.locationBindings )
+    def locationBindings : immutable.Seq[StaticLocationBinding] = locationBindingSources.flatMap( _.locationBindings )
   end Composite
 
 trait Site extends StaticLocationBinding.Source:
