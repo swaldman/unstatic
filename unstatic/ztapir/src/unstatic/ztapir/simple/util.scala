@@ -27,21 +27,11 @@ def contentTypeFromSuffix( name : String ) : Option[String] =
   else
     None
 
-// things that render fragments to output, usually HTML
-type ContentRenderer =
-  Function1[untemplate.Result[Nothing], untemplate.Result[Nothing]]
-
-val ContentTypeBySuffix = immutable.Map (
+private val ContentTypeBySuffix = immutable.Map (
   "html" -> "text/html",
   "md"   -> "text/markdown",
   "txt"  -> "text/plain",
 )
-
-val ContentRendererForContentType = immutable.Map[String,ContentRenderer] (
-  "text/html" -> identity
-)
-
-
 
 private def parseTimestampIsoInstant(timestamp: String): Try[Instant] =
   for

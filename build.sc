@@ -10,6 +10,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
     val UntemplateVersion = "0.0.3-SNAPSHOT"
     val TapirVersion      = "1.2.6"
     val MillVersion       = "0.10.10"
+    val FlexmarkVersion   = "0.64.0"
 
     val Untemplate         = ivy"com.mchange::untemplate:${UntemplateVersion}" // mill.scalalib.Dep
 
@@ -18,6 +19,13 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
       val Untemplate         = Dependency.this.Untemplate
       val TapirZio           = ivy"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = ivy"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
+      val FlexmarkSeq        = Seq (
+        ivy"com.vladsch.flexmark:flexmark:${FlexmarkVersion}",
+        ivy"com.vladsch.flexmark:flexmark-ext-footnotes:${FlexmarkVersion}",
+        ivy"com.vladsch.flexmark:flexmark-ext-tables:${FlexmarkVersion}",
+        ivy"com.vladsch.flexmark:flexmark-ext-gfm-strikethrough:${FlexmarkVersion}",
+        ivy"com.vladsch.flexmark:flexmark-ext-anchorlink:${FlexmarkVersion}",
+      )
     }
     object Test {
       val Scalacheck = ivy"org.scalacheck::scalacheck:1.17.0"
@@ -63,7 +71,7 @@ object unstatic extends UnstaticBuildModule {
           Dependency.ZTapir.TapirZio,
           Dependency.ZTapir.TapirZioHttpServer,
           Dependency.ZTapir.Untemplate,
-        )
+        ) ++ Dependency.ZTapir.FlexmarkSeq
     }
   }
 }

@@ -15,9 +15,15 @@ trait SimpleBlog extends ZTBlog:
       pubDate : Instant,
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
-      permalinkPathSiteRooted : Rooted // from SiteRoot
+      permalinkPathSiteRooted : Rooted // from Site root
     )
-    final case class Input(renderPath : SiteLocation, mediaPath : SiteLocation, presentationMultiple : Boolean)
+    final case class Input (
+      site : Site, // duplocative, since it's accessible from SiteLocations. But easy
+      renderPath : SiteLocation,
+      mediaPath : SiteLocation,
+      inferredInfo : Entry.Info,
+      presentationMultiple : Boolean
+    )
   end Entry
   object Layout:
     object Input:
@@ -25,6 +31,11 @@ trait SimpleBlog extends ZTBlog:
       case class Page( renderLocation : SiteLocation, mainContentHtml : String )
     end Input
   end Layout
+
+  val HtmlifierForContentType = immutable.Map[String,Htmlifier] (
+    "text/html" -> Htmlifier.identity,
+    "text/markdown" -> Flexmark.markdownToHtml,
+  )
 
   type EntryInfo      = Entry.Info
   type EntryInput     = Entry.Input
@@ -63,7 +74,7 @@ trait SimpleBlog extends ZTBlog:
   end entryInfo
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput =
-    Entry.Input( renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), presentationMultiple )
+    Entry.Input( site, renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), resolved.entryInfo, presentationMultiple )
 
   def permalink( resolved : EntryResolved ) : SiteLocation = SiteLocation( resolved.entryInfo.permalinkPathSiteRooted, site )
 
@@ -77,12 +88,13 @@ trait SimpleBlog extends ZTBlog:
   def layoutPage( input : Layout.Input.Page ) : String
 
   def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : String =
-    val renderer = ContentRendererForContentType(resolved.entryInfo.contentType)
+    val htmlifier = HtmlifierForContentType(resolved.entryInfo.contentType)
     val ei = entryInput( renderLocation, resolved, presentationMultiple )
     val result = resolved.entryUntemplate(ei)
-    val renderResult = renderer(result)
+    val htmlifierOptions = Htmlifier.Options(generatorFullyQualifiedName = Some(resolved.entryUntemplate.UntemplateFullyQualifiedName))
+    val htmlResult = htmlifier(result.text, htmlifierOptions)
     val info = resolved.entryInfo
-    val layoutEntryInput = Layout.Input.Entry(renderLocation, renderResult.text, info.mbTitle, info.authors, info.tags, info.pubDate, SiteLocation(info.permalinkPathSiteRooted,site), presentationMultiple )
+    val layoutEntryInput = Layout.Input.Entry(renderLocation, htmlResult, info.mbTitle, info.authors, info.tags, info.pubDate, SiteLocation(info.permalinkPathSiteRooted,site), presentationMultiple )
     layoutEntry( layoutEntryInput )
 
   def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String =
@@ -91,6 +103,8 @@ trait SimpleBlog extends ZTBlog:
     layoutPage( layoutPageInput )
 
   def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String =
+    // println("renderMultiple(...)")
+    // resolveds.foreach( r => println(s"${r.entryUntemplate} -- ${r.entryInfo.pubDate}") )
     val fragmentTexts = resolveds.map(resolved => renderSingleFragment(renderLocation, resolved, true))
     val unifiedFragmentTexts = fragmentTexts.mkString(entrySeparator)
     val layoutPageInput = Layout.Input.Page(renderLocation, unifiedFragmentTexts)

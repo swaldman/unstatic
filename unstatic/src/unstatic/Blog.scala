@@ -31,7 +31,8 @@ trait Blog:
 
   def entryInfo( template : EntryUntemplate ) : EntryInfo
 
-  lazy val entriesResolved : immutable.Set[EntryResolved] = entryUntemplates.map(ut => EntryResolved(entryInfo(ut), ut))
+  lazy val entriesResolved : immutable.SortedSet[EntryResolved] =
+    entryUntemplates.map(ut => EntryResolved(entryInfo(ut), ut)).to(immutable.SortedSet)
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput
 

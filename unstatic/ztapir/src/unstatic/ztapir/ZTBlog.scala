@@ -10,7 +10,7 @@ trait ZTBlog extends Blog with ZTEndpointBinding.Source:
 
   def endpointBindings : immutable.Seq[ZTEndpointBinding] =
     val entryPageBindings =
-      entriesResolved.map { resolved =>
+      entriesResolved.to(Vector).map { resolved =>
         val pl = permalink( resolved )
         ZTEndpointBinding.publicReadOnlyHtml(pl, ZIO.attempt( renderSingle(pl,resolved )))
       }.toVector
