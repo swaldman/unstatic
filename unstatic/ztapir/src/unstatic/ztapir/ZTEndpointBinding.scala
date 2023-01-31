@@ -31,6 +31,14 @@ object ZTEndpointBinding:
   def publicReadOnlyHtml(siteLocation: ZTSite#SiteLocation, task: zio.Task[String]): ZTEndpointBinding =
     publicReadOnlyHtml(siteLocation.siteRootedPath, siteLocation.site, task)
 
+  def publicReadOnlyRss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String] ) : ZTEndpointBinding =
+    ZTEndpointBinding( siteRootedPath, publicReadOnlyRssEndpoint( siteRootedPath, site, task ), Some(ZTLogic.UnitString( task )) )
+
+  def publicReadOnlyRss(siteLocation: ZTSite#SiteLocation, task: zio.Task[String]): ZTEndpointBinding =
+    publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task)
+
+
+
 case class ZTEndpointBinding( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, mbLogic : Option[ZTLogic[_,_]] ):
   lazy val mbGenerator : Option[Task[String]] =
     endpointStaticallyGenerableFilePath(ztServerEndpoint).flatMap { _ =>

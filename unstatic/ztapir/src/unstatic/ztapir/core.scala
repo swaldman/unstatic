@@ -27,20 +27,32 @@ private def inputsForFixedPath( serverRootedPath : Rooted ) : EndpointInput[Unit
   else
     serverRootedPath.elements.tail.foldLeft(serverRootedPath.elements.head : EndpointInput[Unit])( (accum, next) => accum / next )
 
-private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
+private def errMapped[T]( task : Task[T] ) : zio.ZIO[Any,String,T] =
   // XXX: Should I do something to break harder on non-nonFatal errors?
-  val errMappedTask = task.mapError { t =>
+  task.mapError { t =>
     import java.io.*
     val sw = new StringWriter()
     t.printStackTrace(new PrintWriter(sw))
     sw.toString()
   }
+
+private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
       .errorOut(stringBody)
       .out(header(Header.contentType(MediaType.TextHtml)))
       .out(stringBody)
-  endpoint.zServerLogic( _ => errMappedTask )
+  endpoint.zServerLogic( _ => errMapped(task) )
+
+// XXX: should I modify this to output immutable.Seq[Byte]?
+private def publicReadOnlyRssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
+  val endpoint =
+    endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
+      .errorOut(stringBody)
+      .out(header(Header.contentType(MediaType("application","rss+xml"))))
+      .out(stringBody)
+  endpoint.zServerLogic( _ => errMapped(task) )
+
 
 private def endpointStaticallyGenerableFilePath[R,F[_]]( serverEndpoint : ServerEndpoint[R,F] ) : Option[Rooted] =
   endpointStaticallyGenerableFilePath(serverEndpoint.endpoint)

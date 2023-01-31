@@ -33,6 +33,10 @@ private val ContentTypeBySuffix = immutable.Map (
   "txt"  -> "text/plain",
 )
 
+def resolveRelativeUrls( htmlText : String, siteRootedBasePath : Rooted, site : Site ) : String =
+  val baseUri = site.absFromSiteRooted( siteRootedBasePath ).toString
+  org.jsoup.Jsoup.parse( htmlText, baseUri ).outerHtml
+
 private def parseTimestampIsoInstant(timestamp: String): Try[Instant] =
   for
     temporalAccessor <- Try(ISO_INSTANT.parse(timestamp))

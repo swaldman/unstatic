@@ -9,6 +9,7 @@ object UrlPath:
     def apply( url : String ) : Abs = apply(URL(url))
     def apply( url : URL    ) : Abs = Abs(URL(url,"/"), Rooted.parse(url.getPath) )
   final case class Abs private[UrlPath] ( server : URL, path : Rooted ) extends UrlPath:
+    def serverRoot : Abs = this.copy(path = Rooted.root)
     def resolve(relpath: UrlPath.Rel): Abs = this.copy( path = path.resolve(relpath) )
     def resolveSibling(relpath: UrlPath.Rel): Abs = this.copy( path = path.resolveSibling(relpath) )
     def relativize( other : Abs ) : Rel =
@@ -17,6 +18,10 @@ object UrlPath:
       else
         throw new CannotRelativize(s"'${this}' and '${other}' do not share the same server.")
     def embedRoot(rooted : UrlPath.Rooted): Abs = resolve(rooted.unroot)
+    def parentOption : Option[Abs] = path.parentOption.map(p => this.copy(path=p))
+    def parent : Abs = parentOption.getOrElse {
+      throw new BadPathException("Tried to take parent of server root on an absolute UrlPath.")
+    }
     override def toString() : String = server.toString() + path.toString().substring(1)
 
   trait PathPart[T <: PathPart[T]] extends UrlPath:

@@ -19,6 +19,8 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
       val Untemplate         = Dependency.this.Untemplate
       val TapirZio           = ivy"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = ivy"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
+      val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.0.1-SNAPSHOT"
+      val Jsoup              = ivy"org.jsoup:jsoup:1.15.3"
       val FlexmarkSeq        = Seq (
         ivy"com.vladsch.flexmark:flexmark:${FlexmarkVersion}",
         ivy"com.vladsch.flexmark:flexmark-ext-footnotes:${FlexmarkVersion}",
@@ -71,6 +73,8 @@ object unstatic extends UnstaticBuildModule {
           Dependency.ZTapir.TapirZio,
           Dependency.ZTapir.TapirZioHttpServer,
           Dependency.ZTapir.Untemplate,
+          Dependency.ZTapir.AudiofluidityRss,
+          Dependency.ZTapir.Jsoup,
         ) ++ Dependency.ZTapir.FlexmarkSeq
     }
   }
