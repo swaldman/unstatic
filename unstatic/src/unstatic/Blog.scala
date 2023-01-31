@@ -21,8 +21,6 @@ trait Blog:
   type     SiteLocation = site.SiteLocation
   lazy val SiteLocation = site.SiteLocation // better be lazy or we'll fail on construction!
 
-  val title : String
-
   val frontPage           : SiteLocation
   val maxFrontPageEntries : Int
 

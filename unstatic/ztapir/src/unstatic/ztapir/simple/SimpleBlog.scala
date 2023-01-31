@@ -1,11 +1,13 @@
 package unstatic.ztapir.simple
 
-import java.time.{Instant,ZonedDateTime,ZoneId}
+import java.time.{Instant, ZoneId, ZonedDateTime}
 import scala.collection.*
 import unstatic.{Site, *}
 import unstatic.UrlPath.*
 import unstatic.ztapir.*
-import audiofluidity.rss.{Element,Itemable,LanguageCode,RssFeed}
+import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace, RssFeed}
+import audiofluidity.rss.Xmlable.given
+import scala.xml.{Elem, NodeSeq, Null, TopScope, UnprefixedAttribute}
 
 trait SimpleBlog extends ZTBlog:
   object Entry:
@@ -36,47 +38,66 @@ trait SimpleBlog extends ZTBlog:
   // you can override this
   val summaryAsDescriptionMaxLen = 800
 
-  def rssItemForResolved(resolved : EntryResolved) : Element.Item =
+  def rssItemWithDecorationForResolved(resolved : EntryResolved) : ( Element.Item, immutable.Seq[Elem] ) =
     val entryInfo = resolved.entryInfo
     val entryUntemplate = resolved.entryUntemplate
     val absPermalink = site.absFromSiteRooted(resolved.entryInfo.permalinkPathSiteRooted)
     val permalinkRelativeHtml = renderSingleFragment(SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, false)
-    val jsoupDoc = org.jsoup.Jsoup.parse(permalinkRelativeHtml, absPermalink.parent.toString)
-    val absolutizedHtml = jsoupDoc.outerHtml
+    //println(s">>> permalinkRelativeHtml:\n${permalinkRelativeHtml}")
+    val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
+    val absolutizedHtml = resolveRelativeUrls(jsoupDoc).body().html
     val summary =
       val tmp = jsoupDoc.text().take(summaryAsDescriptionMaxLen)
       val lastSpace = tmp.lastIndexOf(' ')
       (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
     val nospamAuthor =
       if entryInfo.authors.nonEmpty then s"""nospam@dev.null (${entryInfo.authors.mkString(", ")})""" else "nospam@dev.null"
-    Element.Item(
-      title = Element.Title(resolved.entryInfo.mbTitle.getOrElse("")),
-      link = Element.Link(absPermalink.toString),
-      description = Element.Description(summary),
-      author = Element.Author(nospamAuthor),
-      categories = Nil,
-      comments = None,
-      enclosure = None,
-      guid = Some(Element.Guid(isPermalink = true, absPermalink.toString)),
-      pubDate = Some(Element.PubDate( entryInfo.pubDate.atZone(ZoneId.systemDefault()))),
-      source = None
-    )
+    val outItem =
+      Element.Item(
+        title = Element.Title(resolved.entryInfo.mbTitle.getOrElse("")),
+        link = Element.Link(absPermalink.toString),
+        description = Element.Description(summary),
+        author = Element.Author(nospamAuthor),
+        categories = Nil,
+        comments = None,
+        enclosure = None,
+        guid = Some(Element.Guid(isPermalink = true, absPermalink.toString)),
+        pubDate = Some(Element.PubDate( entryInfo.pubDate.atZone(ZoneId.systemDefault()))),
+        source = None
+      )
+    val outDecoration = immutable.Seq(Element.Content.Encoded(absolutizedHtml).toElem)
+    (outItem, outDecoration)
 
-  lazy val rssGenerator : RssFeed =
-    val resolveds = entriesResolved.take(maxFrontPageEntries)
-    RssFeed.create[EntryResolved] (
-      title              = title,
+  // you can override this
+  // should remain a def as long as we have lastBuildDate though
+  def feedBuilder =
+    val atomLinkElement =
+      Element.Atom.Link(
+        href = rssFeed.absolutePath.toString(),
+        rel = Some(Element.Atom.LinkRelation.self),
+        `type` = Some("application/rss+xml"),
+        hreflang = None,
+        title = None,
+        length = None)
+    RssFeed.Builder (
+      title              = feedTitle,
       linkUrl            = frontPage.absolutePath.toString,
-      description        = description,
-      itemSources        = resolveds.toSeq,
-      namespaces         = Nil
+      description        = feedDescription,
+      language           = Some(language),
+      lastBuildDate      = Some(ZonedDateTime.now),
+      generator          = Some("https://github.com/swaldman/unstatic"),
+      channelDecorations = List(atomLinkElement.toElem),
+      namespaces         = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
     )
 
+  lazy val feed : RssFeed =
+    val resolveds = entriesResolved.take(maxFrontPageEntries).toSeq
+    RssFeed.create[EntryResolved] ( feedBuilder, resolveds )
 
   // TODO: decorate? strip?
   given Itemable[EntryResolved] with
     extension (resolved : EntryResolved)
-      def toItem : Element.Item = rssItemForResolved(resolved)
+      def toItemWithDecorations : (Element.Item, immutable.Seq[Elem]) = rssItemWithDecorationForResolved(resolved)
 
   val HtmlifierForContentType = immutable.Map[String,Htmlifier] (
     "text/html" -> Htmlifier.identity,
@@ -97,7 +118,14 @@ trait SimpleBlog extends ZTBlog:
   val frontPage           : SiteLocation
   val maxFrontPageEntries : Int
 
-  val description = "Feed for a blog generated by unstatic"
+  // you must override this
+  val feedTitle : String
+
+  // you can override this
+  def feedDescription = s"Feed for blog '${feedTitle}' generated by unstatic"
+
+  // you can override this
+  val language = LanguageCode.EnglishUnitedStates
 
   lazy val rssFeed : SiteLocation = SiteLocation(frontPage.siteRootedPath.resolveSibling("rss.xml") )
 
@@ -171,5 +199,5 @@ trait SimpleBlog extends ZTBlog:
     renderRange( renderLocation, from, Instant.now)
 
   override def endpointBindings : immutable.Seq[ZTEndpointBinding] =
-    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( rssGenerator.asXmlText ))
+    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feed.asXmlText ))
 
