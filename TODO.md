@@ -8,3 +8,6 @@
    - Each post a pseudouser people can @ or follow?
    - Maybe each post a hastag, @ to a common user, 
      comments@interfluidity.com?
+   - See https://carlschwan.eu/2020/12/29/adding-comments-to-your-static-blog-with-mastodon/
+ - Unified executable (server and gen)
+ - RSS!
