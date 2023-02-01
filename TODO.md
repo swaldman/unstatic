@@ -1,6 +1,5 @@
 # TODO
 
- - Add feedLinkHtml function to blog
  - Unified executable (server and gen)
  - Better exceptions, search XXX and TODO
  - Add warnings in ZTStaticGen for eg root paths, 
