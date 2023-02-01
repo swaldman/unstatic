@@ -5,9 +5,8 @@ import scala.collection.*
 import unstatic.{Site, *}
 import unstatic.UrlPath.*
 import unstatic.ztapir.*
-import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace, RssFeed}
-import audiofluidity.rss.Xmlable.given
-import scala.xml.{Elem, NodeSeq, Null, TopScope, UnprefixedAttribute}
+import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
+import scala.xml.{Elem, Node, NodeSeq, Null, TopScope, UnprefixedAttribute}
 
 trait SimpleBlog extends ZTBlog:
   object Entry:
@@ -39,7 +38,7 @@ trait SimpleBlog extends ZTBlog:
   // you can override this
   val summaryAsDescriptionMaxLen = 800
 
-  def rssItemWithDecorationForResolved(resolved : EntryResolved) : ( Element.Item, immutable.Seq[Elem] ) =
+  def rssItemForResolved(resolved : EntryResolved) : Element.Item =
     val entryInfo = resolved.entryInfo
     val entryUntemplate = resolved.entryUntemplate
     val absPermalink = site.absFromSiteRooted(resolved.entryInfo.permalinkPathSiteRooted)
@@ -53,7 +52,7 @@ trait SimpleBlog extends ZTBlog:
       (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
     val nospamAuthor =
       if entryInfo.authors.nonEmpty then s"""nospam@dev.null (${entryInfo.authors.mkString(", ")})""" else "nospam@dev.null"
-    val outItem =
+    val standardItem =
       Element.Item(
         title = Element.Title(resolved.entryInfo.mbTitle.getOrElse("")),
         link = Element.Link(absPermalink.toString),
@@ -66,39 +65,44 @@ trait SimpleBlog extends ZTBlog:
         pubDate = Some(Element.PubDate( entryInfo.pubDate.atZone(ZoneId.systemDefault()))),
         source = None
       )
-    val outDecoration = immutable.Seq(Element.Content.Encoded(absolutizedHtml).toElem)
-    (outItem, outDecoration)
+    standardItem.withExtra(Element.Content.Encoded(absolutizedHtml))
 
   // you can override this
   // should remain a def as long as we have lastBuildDate though
-  def feedBuilder =
-    val atomLinkElement =
-      Element.Atom.Link(
-        href = rssFeed.absolutePath.toString(),
-        rel = Some(Element.Atom.LinkRelation.self),
-        `type` = Some("application/rss+xml"),
-        hreflang = None,
-        title = None,
-        length = None)
-    RssFeed.Builder (
+  def channelSpec =
+    Element.Channel.Spec (
       title              = feedTitle,
       linkUrl            = frontPage.absolutePath.toString,
       description        = feedDescription,
       language           = Some(language),
       lastBuildDate      = Some(ZonedDateTime.now),
       generator          = Some("https://github.com/swaldman/unstatic"),
-      channelDecorations = List(atomLinkElement.toElem),
-      namespaces         = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
     )
 
-  lazy val feed : RssFeed =
-    val resolveds = entriesResolved.take(maxFrontPageEntries).toSeq
-    RssFeed.create[EntryResolved] ( feedBuilder, resolveds )
+  // better be def or lazy!
+  //
+  // if it's a val, it'll blow up trying to fetch the rssFeed SiteLocation before
+  // site has been initialized!
+  def atomLinkChannelExtra =
+    Element.Atom.Link(
+      href = rssFeed.absolutePath.toString(),
+      rel = Some(Element.Atom.LinkRelation.self),
+      `type` = Some("application/rss+xml")
+    )
 
-  // TODO: decorate? strip?
+  val rssNamespaces = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
+
+  lazy val feedTransformer : Node => Node = identity
+
+  lazy val feed : Element.Rss =
+    val items = entriesResolved.take(maxFrontPageEntries).toSeq.map(_.toItem).toSeq
+    val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra )
+    Element.Rss(channel=channel).overNamespaces(rssNamespaces)
+
+
   given Itemable[EntryResolved] with
     extension (resolved : EntryResolved)
-      def toItemWithDecorations : (Element.Item, immutable.Seq[Elem]) = rssItemWithDecorationForResolved(resolved)
+      def toItem : Element.Item = rssItemForResolved(resolved)
 
   val HtmlifierForContentType = immutable.Map[String,Htmlifier] (
     "text/html" -> Htmlifier.identity,
@@ -202,5 +206,5 @@ trait SimpleBlog extends ZTBlog:
     renderRange( renderLocation, from, Instant.now)
 
   override def endpointBindings : immutable.Seq[ZTEndpointBinding] =
-    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feed.asXmlText ))
+    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feed.asXmlText(transformer=feedTransformer) ))
 
