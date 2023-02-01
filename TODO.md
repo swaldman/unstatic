@@ -1,6 +1,5 @@
 # TODO
 
- - Add blog reference to entry input
  - Add feedLinkHtml function to blog
  - Unified executable (server and gen)
  - Better exceptions, search XXX and TODO
