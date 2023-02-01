@@ -134,7 +134,7 @@ trait SimpleBlog extends ZTBlog:
   // you can override this
   val language = LanguageCode.EnglishUnitedStates
 
-  lazy val rssFeed : SiteLocation = SiteLocation(frontPage.siteRootedPath.resolveSibling("rss.xml") )
+  lazy val rssFeed : SiteLocation = SiteLocation(frontPage.siteRootedPath.resolveSibling("feed.rss") )
 
   /**
    * Filter the index of your untemplates for the blog's entries
