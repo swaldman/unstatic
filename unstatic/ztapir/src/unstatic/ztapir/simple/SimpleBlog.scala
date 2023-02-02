@@ -95,9 +95,9 @@ trait SimpleBlog extends ZTBlog:
   lazy val feedTransformer : Node => Node = identity
 
   lazy val feed : Element.Rss =
-    val items = entriesResolved.take(maxFrontPageEntries).toSeq.map(_.toItem).toSeq
+    val items = entriesResolved.take(maxFrontPageEntries)
     val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra )
-    Element.Rss(channel=channel).overNamespaces(rssNamespaces)
+    Element.Rss(channel).overNamespaces(rssNamespaces)
 
 
   given Itemable[EntryResolved] with
