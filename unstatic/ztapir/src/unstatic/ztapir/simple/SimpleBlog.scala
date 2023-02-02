@@ -6,7 +6,6 @@ import unstatic.{Site, *}
 import unstatic.UrlPath.*
 import unstatic.ztapir.*
 import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
-import scala.xml.{Elem, Node, NodeSeq, Null, TopScope, UnprefixedAttribute}
 
 trait SimpleBlog extends ZTBlog:
   object Entry:
@@ -90,15 +89,16 @@ trait SimpleBlog extends ZTBlog:
       `type` = Some("application/rss+xml")
     )
 
-  val rssNamespaces = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
+  def rssNamespaces = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
 
-  lazy val feedTransformer : Node => Node = identity
+  def feedToXmlSpec : Element.ToXml.Spec = Element.ToXml.Spec.Default
 
   lazy val feed : Element.Rss =
     val items = entriesResolved.take(maxFrontPageEntries)
     val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra )
     Element.Rss(channel).overNamespaces(rssNamespaces)
 
+  lazy val feedXml : String = feed.asXmlText(feedToXmlSpec)
 
   given Itemable[EntryResolved] with
     extension (resolved : EntryResolved)
@@ -206,5 +206,5 @@ trait SimpleBlog extends ZTBlog:
     renderRange( renderLocation, from, Instant.now)
 
   override def endpointBindings : immutable.Seq[ZTEndpointBinding] =
-    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feed.asXmlText(transformer=feedTransformer) ))
+    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feedXml ))
 
