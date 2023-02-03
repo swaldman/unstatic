@@ -21,8 +21,8 @@ trait SimpleBlog extends ZTBlog:
     final case class Input (
       blog : SimpleBlog,
       site : Site, // duplicative, since it's accessible from SiteLocations. But easy
-      renderPath : SiteLocation,
-      mediaPath : SiteLocation,
+      renderLocation : SiteLocation,
+      mediaLocation : SiteLocation,
       inferredInfo : Entry.Info,
       presentationMultiple : Boolean
     )
@@ -112,6 +112,8 @@ trait SimpleBlog extends ZTBlog:
   type EntryInfo      = Entry.Info
   type EntryInput     = Entry.Input
   type EntryMetadata  = Nothing
+
+  def entryId( entryResolved : EntryResolved ) : String = entryResolved.entryUntemplate.UntemplateName
 
   /**
    * Reverse-chronological!

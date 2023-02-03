@@ -9,7 +9,8 @@ trait Blog:
   type EntryMetadata
   type EntryUntemplate = untemplate.Untemplate[EntryInput,EntryMetadata]
 
-  case class EntryResolved( entryInfo : EntryInfo, entryUntemplate : EntryUntemplate )
+  case class EntryResolved( entryInfo : EntryInfo, entryUntemplate : EntryUntemplate ):
+    def permalink = Blog.this.permalink( this )
 
   /**
    * Usually reverse-chronological!
@@ -35,6 +36,16 @@ trait Blog:
     entryUntemplates.map(ut => EntryResolved(entryInfo(ut), ut)).to(immutable.SortedSet)
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput
+
+  def entryId( entryResolved : EntryResolved ) : String
+
+  lazy val mapEntryById = entriesResolved.map( resolved => Tuple2(entryId(resolved), resolved) ).toMap
+
+  def entryById( id : String ) : EntryResolved =
+    mapEntryById.get(id) match {
+      case Some( resolved ) => resolved
+      case None             => throw new NoSuchEntry(s"Cannot find '${id}' among entry IDs " + mapEntryById.map( _(0) ).mkString(", "))
+    }
 
   def permalink( resolved : EntryResolved ) : SiteLocation
 
