@@ -26,6 +26,9 @@ trait Site extends StaticLocationBinding.Source:
   def absFromSiteRooted( fromSiteRootedPath : Rooted ) : Abs = absFromServerRooted(serverRootedPath(fromSiteRootedPath))
   def absFromSiteRooted( fromSiteRootedPath : String ) : Abs = absFromSiteRooted( Rooted( fromSiteRootedPath ) )
 
+  def location( siteRootedPath : Rooted ) : SiteLocation = SiteLocation( siteRootedPath )
+  def location( siteRootedPath : String ) : SiteLocation = location(Rooted.parseAndRoot( siteRootedPath ))
+
   case class SiteLocation( siteRootedPath : Rooted, site : this.type = Site.this ):
     def relative(using base: PageBase) : Rel          = base.siteRootedParentOfPage.relativize(siteRootedPath)
     lazy val serverRootedPath          : Rooted       = site.serverRootedPath(siteRootedPath)
