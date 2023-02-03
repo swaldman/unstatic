@@ -76,7 +76,8 @@ private object ZTStaticGen:
         _          <- ZIO.attempt( Files.writeString(destPath, contents, codec.charSet) )
       yield()
 
-    val locationTasks = unignoredLocationBindings.map( slb => generateLocation(slb.siteRootedPath, slb.source) )
+    // note that we reverse, so that if there are conficts, early location bindings will overwrite late ones
+    val locationTasks = unignoredLocationBindings.reverse.map( slb => generateLocation(slb.siteRootedPath, slb.source) )
 
     // println(s"locationTasks: " + locationTasks.mkString(", "))
 
