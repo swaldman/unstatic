@@ -35,7 +35,12 @@ trait SimpleBlog extends ZTBlog:
   end Layout
 
   // you can override this
-  val summaryAsDescriptionMaxLen = 500
+  val defaultSummaryAsDescriptionMaxLen = 500
+
+  def rssSummaryAsDescription(jsoupDocAbsolutized : org.jsoup.nodes.Document) : String =
+    val tmp = jsoupDocAbsolutized.text().take(defaultSummaryAsDescriptionMaxLen)
+    val lastSpace = tmp.lastIndexOf(' ')
+    (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
 
   def rssItemForResolved(resolved : EntryResolved) : Element.Item =
     val entryInfo = resolved.entryInfo
@@ -44,11 +49,9 @@ trait SimpleBlog extends ZTBlog:
     val permalinkRelativeHtml = renderSingleFragment(SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, false)
     //println(s">>> permalinkRelativeHtml:\n${permalinkRelativeHtml}")
     val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
-    val absolutizedHtml = resolveRelativeUrls(jsoupDoc).body().html
-    val summary =
-      val tmp = jsoupDoc.text().take(summaryAsDescriptionMaxLen)
-      val lastSpace = tmp.lastIndexOf(' ')
-      (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
+    val jsoupDocAbsolutized = resolveRelativeUrls(jsoupDoc)
+    val absolutizedHtml = jsoupDocAbsolutized.body().html
+    val summary = rssSummaryAsDescription(jsoupDocAbsolutized)
     val nospamAuthor =
       if entryInfo.authors.nonEmpty then s"""nospam@dev.null (${entryInfo.authors.mkString(", ")})""" else "nospam@dev.null"
     val standardItem =
