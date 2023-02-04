@@ -35,7 +35,7 @@ trait SimpleBlog extends ZTBlog:
   end Layout
 
   // you can override this
-  val summaryAsDescriptionMaxLen = 800
+  val summaryAsDescriptionMaxLen = 500
 
   def rssItemForResolved(resolved : EntryResolved) : Element.Item =
     val entryInfo = resolved.entryInfo
