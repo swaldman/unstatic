@@ -23,7 +23,7 @@ trait Blog:
   lazy val SiteLocation = site.SiteLocation // better be lazy or we'll fail on construction!
 
   val frontPage           : SiteLocation
-  val maxFrontPageEntries : Int
+  val maxFrontPageEntries : Option[Int]
 
   def narrowRawUntemplate( rawUntemplate : untemplate.Untemplate[Any,Nothing] ) =
     rawUntemplate.asInstanceOf[untemplate.Untemplate[EntryInput,EntryMetadata]]

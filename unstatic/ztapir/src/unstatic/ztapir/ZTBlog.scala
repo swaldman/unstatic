@@ -15,7 +15,8 @@ trait ZTBlog extends Blog with ZTEndpointBinding.Source:
         ZTEndpointBinding.publicReadOnlyHtml(pl, ZIO.attempt( renderSingle(pl,resolved )))
       }.toVector
     val frontPageBinding =
-      ZTEndpointBinding.publicReadOnlyHtml(frontPage, ZIO.attempt( renderTop( frontPage, maxFrontPageEntries ) ) )
+      val maxToRender = maxFrontPageEntries.getOrElse( Int.MaxValue )
+      ZTEndpointBinding.publicReadOnlyHtml(frontPage, ZIO.attempt( renderTop( frontPage, maxToRender ) ) )
     entryPageBindings :+ frontPageBinding
 
 

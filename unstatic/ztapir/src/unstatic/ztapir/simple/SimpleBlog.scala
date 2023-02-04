@@ -94,7 +94,19 @@ trait SimpleBlog extends ZTBlog:
   def feedToXmlSpec : Element.ToXml.Spec = Element.ToXml.Spec.Default
 
   lazy val feed : Element.Rss =
-    val items = entriesResolved.take(maxFrontPageEntries)
+    val instantOrdering = summon[Ordering[Instant]]
+    val items =
+      ( maxFeedEntries, onlyFeedEntriesSince ) match
+        case(Some(max), Some(since)) =>
+          entriesResolved
+            .filter( resolved => instantOrdering.compare(resolved.entryInfo.pubDate,since) > 0 )
+            .take(max)
+        case (None, Some(since)) =>
+          entriesResolved.filter( resolved => instantOrdering.compare(resolved.entryInfo.pubDate,since) > 0 )
+        case (Some(max), None) =>
+          entriesResolved.take(max)
+        case (None,None) =>
+          entriesResolved
     val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra )
     Element.Rss(channel).overNamespaces(rssNamespaces)
 
@@ -123,7 +135,9 @@ trait SimpleBlog extends ZTBlog:
 
   val site                : Site // the type is Blog.this.Site, narrowed to ZTSite by ZTBlog
   val frontPage           : SiteLocation
-  val maxFrontPageEntries : Int
+
+  def maxFeedEntries       : Option[Int]     = maxFrontPageEntries
+  def onlyFeedEntriesSince : Option[Instant] = None
 
   // you must override this
   val feedTitle : String
