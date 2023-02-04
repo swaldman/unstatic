@@ -1,6 +1,7 @@
 package unstatic
 
 import scala.collection.*
+import scala.annotation.tailrec
 
 trait Blog:
   type Site <: unstatic.Site
@@ -37,9 +38,25 @@ trait Blog:
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput
 
-  def entryId( entryResolved : EntryResolved ) : String
+  def entryIds( entryResolved : EntryResolved ) : List[String] =
+    val fqn = entryResolved.entryUntemplate.UntemplateFullyQualifiedName
+    val fqnList = fqn.split('.').toList
 
-  lazy val mapEntryById = entriesResolved.map( resolved => Tuple2(entryId(resolved), resolved) ).toMap
+    @tailrec
+    def suffixes(name : List[String], accum : List[List[String]]) : List[List[String]] =
+      name match
+        case head :: tail => suffixes(tail, accum :+ name)
+        case Nil => accum
+
+    suffixes(fqnList, Nil).map( _.mkString(".") )
+
+  lazy val mapEntryById =
+    val rawTuples = entriesResolved.toList.flatMap( resolved => entryIds(resolved).map( id => Tuple2(id, resolved) ) )
+    val ambiguousKeys = rawTuples.groupBy( _(0) ).filter{ case (id, matchTups) => matchTups.length > 1 }.keys.toSet
+    if ambiguousKeys.nonEmpty then
+      // XXX: we need to choose a logging scheme!
+      println(s"The following potential entry IDs could refer to multiple entries, so cannot be used: " + ambiguousKeys.mkString(", "))
+    rawTuples.filter( tup => !ambiguousKeys(tup(0)) ).toMap
 
   def entryById( id : String ) : EntryResolved =
     mapEntryById.get(id) match {

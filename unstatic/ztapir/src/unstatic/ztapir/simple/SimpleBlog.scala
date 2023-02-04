@@ -125,8 +125,6 @@ trait SimpleBlog extends ZTBlog:
   type EntryInput     = Entry.Input
   type EntryMetadata  = Nothing
 
-  def entryId( entryResolved : EntryResolved ) : String = entryResolved.entryUntemplate.UntemplateName
-
   /**
    * Reverse-chronological!
    */
