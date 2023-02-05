@@ -133,7 +133,9 @@ object ZTSite:
             _            <- serveTask
           yield staticResult
 
-    override def run =
+    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }
+
+    val runTask =
       for
         args <- getArgs
         cfg  <- ZIO.attempt( config(args.toArray) )
