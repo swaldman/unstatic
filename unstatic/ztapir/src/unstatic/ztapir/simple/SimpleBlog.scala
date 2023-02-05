@@ -42,12 +42,11 @@ trait SimpleBlog extends ZTBlog:
     val lastSpace = tmp.lastIndexOf(' ')
     (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
 
-  def rssItemForResolved(resolved : EntryResolved) : Element.Item =
+  def rssItemForResolved(resolved : EntryResolved, fullContent : Boolean) : Element.Item =
     val entryInfo = resolved.entryInfo
     val entryUntemplate = resolved.entryUntemplate
     val absPermalink = site.absFromSiteRooted(resolved.entryInfo.permalinkPathSiteRooted)
     val permalinkRelativeHtml = renderSingleFragment(SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, false)
-    //println(s">>> permalinkRelativeHtml:\n${permalinkRelativeHtml}")
     val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
     val jsoupDocAbsolutized = resolveRelativeUrls(jsoupDoc)
     val absolutizedHtml = jsoupDocAbsolutized.body().html
@@ -67,7 +66,7 @@ trait SimpleBlog extends ZTBlog:
         pubDate = Some(Element.PubDate( entryInfo.pubDate.atZone(ZoneId.systemDefault()))),
         source = None
       )
-    standardItem.withExtra(Element.Content.Encoded(absolutizedHtml))
+    if fullContent then standardItem.withExtra(Element.Content.Encoded(absolutizedHtml)) else standardItem
 
   // you can override this
   // should remain a def as long as we have lastBuildDate though
@@ -96,7 +95,11 @@ trait SimpleBlog extends ZTBlog:
 
   def feedToXmlSpec : Element.ToXml.Spec = Element.ToXml.Spec.Default
 
-  lazy val feed : Element.Rss =
+  def makeFeed( fullContent : Boolean = true ) : Element.Rss =
+    given Itemable[EntryResolved] with
+      extension (resolved : EntryResolved)
+        def toItem : Element.Item = rssItemForResolved(resolved, fullContent)
+
     val instantOrdering = summon[Ordering[Instant]]
     val items =
       ( maxFeedEntries, onlyFeedEntriesSince ) match
@@ -113,11 +116,11 @@ trait SimpleBlog extends ZTBlog:
     val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra )
     Element.Rss(channel).overNamespaces(rssNamespaces)
 
-  lazy val feedXml : String = feed.asXmlText(feedToXmlSpec)
+  // you can override this
+  val fullContentFeed = true
 
-  given Itemable[EntryResolved] with
-    extension (resolved : EntryResolved)
-      def toItem : Element.Item = rssItemForResolved(resolved)
+  lazy val feed : Element.Rss = makeFeed( fullContentFeed )
+  lazy val feedXml : String = feed.asXmlText(feedToXmlSpec)
 
   val HtmlifierForContentType = immutable.Map[String,Htmlifier] (
     "text/html" -> Htmlifier.identity,
