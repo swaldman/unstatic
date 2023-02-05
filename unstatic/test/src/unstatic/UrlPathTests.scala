@@ -30,7 +30,7 @@ object UrlPathTests extends TestSuite:
       test - assert(Rooted("/hello/../there").canonical == Rooted("/there"))
       test - assert(Rel("hello/../../there").canonical == Rel("../there"))
       test - assert(Rel("./hello/.././../there/.").canonical == Rel("../there"))
-      test - assert( doesThrow[BadPathException]( Rooted("/hello/.././../there/.") ) )
+      test - assert( doesThrow[BadPath]( Rooted("/hello/.././../there/.") ) )
       test - assert(Rooted("/hello/..").canonical == Rooted.root)
     }
     test("UrlPath.parentOption") {
@@ -39,7 +39,7 @@ object UrlPathTests extends TestSuite:
       test - assert(Rel.here.parentOption == Some(Rel("..")))
     }
     test("UrlPath.parent") {
-      test - assert( doesThrow[BadPathException](Rooted.root.parent) )
-      test - assert( doesThrow[BadPathException](Rooted("/hello").parent.parent) )
+      test - assert( doesThrow[BadPath](Rooted.root.parent) )
+      test - assert( doesThrow[BadPath](Rooted("/hello").parent.parent) )
     }
   }

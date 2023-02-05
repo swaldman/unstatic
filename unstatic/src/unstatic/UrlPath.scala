@@ -20,7 +20,7 @@ object UrlPath:
     def embedRoot(rooted : UrlPath.Rooted): Abs = resolve(rooted.unroot)
     def parentOption : Option[Abs] = path.parentOption.map(p => this.copy(path=p))
     def parent : Abs = parentOption.getOrElse {
-      throw new BadPathException("Tried to take parent of server root on an absolute UrlPath.")
+      throw new BadPath("Tried to take parent of server root on an absolute UrlPath.")
     }
     override def toString() : String = server.toString() + path.toString().substring(1)
 
@@ -57,7 +57,7 @@ object UrlPath:
           if this.elements.nonEmpty then Some(this.withElements(this.elements.init)) else Some(this.withElements(Vector("..")))
       }
     def parent : T = parentOption.getOrElse {
-      throw new BadPathException("Tried to take parent of root on a rooted path.")
+      throw new BadPath("Tried to take parent of root on a rooted path.")
     }
     def isDotty : Boolean = elements.exists( e => e == "." || e == ".." )
     def isRooted : Boolean
@@ -67,7 +67,7 @@ object UrlPath:
   object Rooted:
     private def preparse( path : String, strict : Boolean ) : Vector[String] =
       if strict && (path.isEmpty || path(0) != '/') then
-        throw new BadPathException(s"Putative rooted path '${path}' must begin with '/'.")
+        throw new BadPath(s"Putative rooted path '${path}' must begin with '/'.")
       path.split("""\/+""").filter(_.nonEmpty).to(Vector)
 
     private[UrlPath] def wouldEscapeRoot( elements : Vector[String]) : Boolean = dotDotHead(_dedottifySuffix(elements))
@@ -75,7 +75,7 @@ object UrlPath:
     private def guard( elements : Vector[String] ) : Unit =
       val check = _dedottifySuffix(elements)
       if dotDotHead(check) then
-        throw new BadPathException (
+        throw new BadPath (
           s"""Resolving elements provided would escape root of Rooted path. Given path: '${elements.mkString("/","/","")}', Resolved path: '${Rel.fromElements(check : _*)}'"""
         )
 
@@ -90,7 +90,7 @@ object UrlPath:
       new Rooted( elements )
   case class Rooted private[UrlPath] ( val elements : Vector[String] ) extends PathPart[Rooted]:
     private[UrlPath] def withElements( elements : Vector[String] ) : Rooted = this.copy(elements = elements)
-    private[UrlPath] def aboveParent : Rooted = throw new BadPathException("Attempted to take the parent of a root path.")
+    private[UrlPath] def aboveParent : Rooted = throw new BadPath("Attempted to take the parent of a root path.")
     def unroot : Rel = Rel( this.elements )
     def isPrefixOf(other : Rooted) =
       other.elements.length >= this.elements.length && (0 until this.elements.length).forall( i => this.elements(i) == other.elements(i))
@@ -101,7 +101,7 @@ object UrlPath:
   object Rel:
     private def preparse(path: String): Vector[String] =
       if path.nonEmpty && path(0) == '/' then
-        throw new BadPathException(s"Putative relative (unrooted) path '${path}' must not begin with '/'.")
+        throw new BadPath(s"Putative relative (unrooted) path '${path}' must not begin with '/'.")
       path.split("""\/+""").filter(_.nonEmpty).to(Vector)
     def parse( path : String ) : Rel = Rel(preparse(path))
     def apply( path : String ) : Rel = parse(path)
