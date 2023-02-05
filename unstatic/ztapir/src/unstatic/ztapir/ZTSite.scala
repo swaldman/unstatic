@@ -121,7 +121,7 @@ object ZTSite:
         case Some(cfg) => cfg
         case _ => throw new BadCommandLine("Bad command line options provided: " + args.mkString(" "))
 
-    def work( cfg : Config ) : ZIO[Any, Throwable, ZTStaticGen.Result] | ZIO[Any, Throwable, Unit] =
+    def work( cfg : Config ) : Task[ZTStaticGen.Result] | Task[Unit] =
       val genTask   = generate(site)(using cfg.cfgStatic)
       val serveTask = serve(site)(using cfg.cfgDynamic)
       cfg.command match
