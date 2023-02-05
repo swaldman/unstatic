@@ -62,6 +62,7 @@ object ZTSite:
     val server =
       for
         app <- ZIO.attempt(buildApp(site))
+        _   <- Console.printLineError(s"Beginning HTTP Service on port ${cfg.port}.")
         svr <- Server.serve(app)
       yield svr
     server.provide(configLayer, Server.live)
@@ -96,8 +97,8 @@ object ZTSite:
               opt[Int]('p', "port")
                 .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(port = x) ) )
                 .text("the port on which to serve HTTP"),
-              opt[Boolean]("verbose")
-                .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(serverInterpreterOptions = Config.Dynamic.interpreterOptions(x)) ) )
+              opt[Unit]("verbose")
+                .action( (_, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(serverInterpreterOptions = Config.Dynamic.VerboseServerInterpreterOptions) ) )
             ),
           cmd(Config.Command.hybrid.toString)
             .text("generate partial site and serve rest dynamically")
@@ -113,8 +114,8 @@ object ZTSite:
               opt[Int]('p', "port")
                 .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(port = x) ) )
                 .text("the port on which to serve HTTP"),
-              opt[Boolean]("verbose")
-                .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(serverInterpreterOptions = Config.Dynamic.interpreterOptions(x)) ) )
+              opt[Unit]("verbose")
+                .action( (_, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(serverInterpreterOptions = Config.Dynamic.VerboseServerInterpreterOptions) ) )
             )
        )
       OParser.parse(parser1, args, Config()) match
