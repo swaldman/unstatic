@@ -9,6 +9,8 @@ class BadCommandLine(message : String, cause : Throwable = null)  extends Unstat
 class NoEndpointsDefined(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
 class PathNotFromSite(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
 class NotStaticallyGenerable(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
+class MustRepresentDirectory(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
+
 
 
 

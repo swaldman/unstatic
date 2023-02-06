@@ -31,7 +31,13 @@ object UrlPath:
     private[UrlPath] def withElements( elements : Vector[String] ) : T
     private[UrlPath] def withRepresentsDir( representsDir : Boolean ) : T
     def asDir : T = if this.representsDir then this else this.withRepresentsDir(true)
-    def asNotDir : T = if this.representsDir then this.withRepresentsDir(false) else this
+    def asNotDir : T =
+      if this.representsDir then
+        if this.elements.isEmpty then throw new MustRepresentDirectory("An empty path can only represent a directory (root or current)")
+        else if dottyLast(this.elements) then throw new MustRepresentDirectory("Paths ending in '.' or '..' can only represent directories!")
+        else this.withRepresentsDir(false)
+      else
+        this
     def resolve(relpath: Rel): T = this.withElements( this.elements ++ relpath.elements ).withRepresentsDir(relpath.representsDir)
     def resolveSibling(relpath: Rel): T = this.withElements( this.elements.init ++ relpath.elements ).withRepresentsDir(relpath.representsDir) // will throw if we're empty!
     def resolve(relpath : String) : T = this.resolve(Rel(relpath))
@@ -105,11 +111,11 @@ object UrlPath:
         if last == "." || last == ".." then new Rooted(realElements, true) else new Rooted( realElements, false )
     def apply( elements : Vector[String], representsDir : Boolean ) : Rooted =
       if elements.isEmpty then
-        if representsDir then root else throw new UnstaticException("Cannot create root element that does not represent a directory")
+        if representsDir then root else throw new MustRepresentDirectory("Cannot create root element that does not represent a directory")
       else
         val last = elements.last
         if !representsDir && (last == "." || last == "..") then
-          throw new UnstaticException("A path ending in '.' or '..' must represent a directory.")
+          throw new MustRepresentDirectory("A path ending in '.' or '..' must represent a directory.")
         else
           guard(elements)
           new Rooted( elements, representsDir )
@@ -122,11 +128,6 @@ object UrlPath:
       other.elements.length >= this.elements.length && (0 until this.elements.length).forall( i => this.elements(i) == other.elements(i))
     def isRoot : Boolean = elements.isEmpty
     def isRooted : Boolean = true
-    override def asNotDir: Rooted =
-      if this == Rooted.root then
-        throw new UnstaticException("The root Rooted element can only represent a directory, call to root.asNotDir is invalid")
-      else
-        super.asNotDir
     override def toString() : String = "/" + super.toString()
 
   object Rel:
@@ -144,7 +145,7 @@ object UrlPath:
     def apply( elements : Vector[String] ) : Rel =
       if elements.isEmpty then here else apply( elements, false )
     def apply( elements : Vector[String], representsDir : Boolean ) : Rel =
-      if elements.isEmpty && !representsDir then throw new UnstaticException("An empty UrlPath.Rel can only represent a directory!")
+      if elements.isEmpty && !representsDir then throw new MustRepresentDirectory("An empty UrlPath.Rel can only represent a directory!")
       new Rel( elements, representsDir )
     def fromElements( elements : String* ) : Rel =
       val realElements = elements.filter( _.nonEmpty ).to(Vector)

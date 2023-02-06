@@ -29,12 +29,12 @@ object UrlPathTests extends TestSuite:
     test("UrlPath.Rooted.canonical") {
       test - assert(Rooted("/hello/../there").canonical == Rooted("/there"))
       test - assert(Rel("hello/../../there").canonical == Rel("../there"))
-      test - assert(Rel("./hello/.././../there/.").canonical == Rel("../there"))
+      test - assert(Rel("./hello/.././../there/.").canonical == Rel("../there").asDir)
       test - assert( doesThrow[BadPath]( Rooted("/hello/.././../there/.") ) )
       test - assert(Rooted("/hello/..").canonical == Rooted.root)
     }
     test("UrlPath.parentOption") {
-      test - assert(Rooted("/hello/there").parentOption == Some(Rooted("/hello")))
+      test - assert(Rooted("/hello/there").parentOption == Some(Rooted("/hello").asDir))
       test - assert(Rooted.root.parentOption == None)
       test - assert(Rel.here.parentOption == Some(Rel("..")))
     }
