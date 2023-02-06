@@ -15,6 +15,18 @@ import java.nio.file.Path as JPath
 
 type ZTServerEndpoint = ZServerEndpoint[Any,Any] //ServerEndpoint[Any,[t] =>> ZIO[Any,String,t]]
 
+// valid operations returning ZServerEndpoint[Nothing,Any] seems to be a Scala 3/tapir
+// type inference glitch.
+//
+// see https://github.com/softwaremill/tapir/issues/2694
+//
+// for now we workaround.
+
+extension ( badInference : ZServerEndpoint[Nothing,Any] )
+  def glitchWiden : ZTServerEndpoint =
+    badInference.asInstanceOf[ZTServerEndpoint]
+
+
 private def endpointForFixedPath( serverRootedPath : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =
   if (serverRootedPath == Rooted.root) then
     endpoint.get.in("")
@@ -52,10 +64,10 @@ private def redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRooted : 
   val endpoint =
     endpointForFixedPath(fromServerRooted)
     .in(extractFromRequest( _.showShort ))
-    .errorOut(stringBody)
+    .errorOut(stringBody(CharsetUTF8))
     .out(
       oneOf[String] (
-        oneOfVariantValueMatcher(StatusCode.MovedPermanently, stringBody) {
+        oneOfVariantValueMatcher(StatusCode.MovedPermanently, stringBody(CharsetUTF8)) {
           case (str : String) => str.startsWith(DirIndexRedirectStart)
           case other => { println("Unexpected input to redirect variant matcher: " + other); false }
         },
@@ -66,7 +78,7 @@ private def redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRooted : 
     )
   )
   val logic : String => Task[String] = (s : String) => ZIO.attempt(s)
-  val ztServerEndpoint = endpoint.zServerLogic(errMapped[String,String](logic)).asInstanceOf[ZTServerEndpoint] // weird type Scala 3 tapir type inference glitch
+  val ztServerEndpoint = endpoint.zServerLogic(errMapped[String,String](logic)).glitchWiden
   ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)))
 
 private def redirectEndpoint( fromServerRooted : Rooted, toServerRooted : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =
@@ -76,28 +88,30 @@ private def redirectEndpoint( fromServerRooted : Rooted, toServerRooted : Rooted
 
 private val UnitTask = ZIO.attempt( () )
 
+private val CharsetUTF8 = scala.io.Codec.UTF8.charSet
+
 private def redirectZTEndpointBinding( fromServerRooted : Rooted, toServerRooted : Rooted, site : Site ) : ZTEndpointBinding =
   val endpoint = redirectEndpoint(fromServerRooted,toServerRooted)
   val logic : Unit => ZIO[Any,Throwable,Unit] =  _ => UnitTask
-  val ztServerEndpoint = endpoint.zServerLogic( logic.andThen(_.mapError(_ => ()) ) ).asInstanceOf[ZTServerEndpoint] // weird type Scala 3 tapir type inference glitch
+  val ztServerEndpoint = endpoint.zServerLogic( logic.andThen(_.mapError(_ => ()) ) ).glitchWiden
   ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)))
 
 private def staticallyGenerableZTEndpointBindingWithNewSiteRootedPath( newSiteRootedPath : Rooted, site : Site, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
   val newServerRootedPath = site.serverRootedPath(newSiteRootedPath)
-  staticallyGenerableZTEndpointBinding( newSiteRootedPath, newServerRootedPath, generableBinding )
+  staticallyGenerableZTEndpointBindingWithNewPath( newSiteRootedPath, newServerRootedPath, generableBinding )
 
 private def staticallyGenerableZTEndpointBindingWithNewServerRootedPath( newServerRootedPath : Rooted, site : Site, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
   val newSiteRootedPath = site.siteRootedPath(newServerRootedPath)
-  staticallyGenerableZTEndpointBinding( newSiteRootedPath, newServerRootedPath, generableBinding )
+  staticallyGenerableZTEndpointBindingWithNewPath( newSiteRootedPath, newServerRootedPath, generableBinding )
 
 // Careful! nothing enforces consistency of newServer and newSite rooted paths in this method!
 // Better to use one of the variants above!
-private def staticallyGenerableZTEndpointBinding( newSiteRootedPath : Rooted, newServerRootedPath : Rooted, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
+private def staticallyGenerableZTEndpointBindingWithNewPath( newSiteRootedPath : Rooted, newServerRootedPath : Rooted, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
   if (!generableBinding.isGenerable) then
     throw new NotStaticallyGenerable( s"ZTEndpointBinding ${generableBinding} is not statically generable, cannot be repurposed to generate the same document at a new fixed path." )
   else
     val newZTServerEndpoint = // XXX: Should we copy rather than attempt to reconstruct errorOut
-      val newEndpoint = endpointForFixedPath( newServerRootedPath ).errorOut(stringBody).copy(output=generableBinding.ztServerEndpoint.output)
+      val newEndpoint = endpointForFixedPath( newServerRootedPath ).errorOut(stringBody(CharsetUTF8)).copy(output=generableBinding.ztServerEndpoint.output)
       val newLogicTask = (generableBinding.mbStringGenerator orElse generableBinding.mbBytesGenerator).get // since we're generable one of these must be nonEmpty
       // since we're using both the output and type of generableBinding, we know they should be consistent
       newEndpoint.zServerLogic( _ => errMapped(newLogicTask.asInstanceOf[zio.Task[generableBinding.ztServerEndpoint.OUTPUT]]))
@@ -106,18 +120,18 @@ private def staticallyGenerableZTEndpointBinding( newSiteRootedPath : Rooted, ne
 private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
-      .errorOut(stringBody)
-      .out(header(Header.contentType(MediaType.TextHtml)))
-      .out(stringBody)
+      .errorOut(stringBody(CharsetUTF8))
+      .out(header(Header.contentType(MediaType.TextHtml.charset(CharsetUTF8))))
+      .out(htmlBodyUtf8)
   endpoint.zServerLogic( _ => errMapped(task) )
 
 // XXX: should I modify this to output immutable.ArraySeq[Byte]?
 private def publicReadOnlyRssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
-      .errorOut(stringBody)
-      .out(header(Header.contentType(MediaType("application","rss+xml"))))
-      .out(stringBody)
+      .errorOut(stringBody(CharsetUTF8))
+      .out(header(Header.contentType(MediaType("application","rss+xml").charset(CharsetUTF8))))
+      .out(stringBody(CharsetUTF8))
   endpoint.zServerLogic( _ => errMapped(task) )
 
 private def staticDirectoryServingEndpoint(siteRootedPath: Rooted, site: Site, dir: JPath): ZTServerEndpoint =
