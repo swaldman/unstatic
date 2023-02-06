@@ -54,7 +54,7 @@ private def errMapped[S,T]( f : Function1[S,Task[T]] ) : Function1[S,zio.ZIO[Any
 
 private val DirIndexRedirectStart = "DIRECTORY INDEX REDIRECT"
 private def directoryRedirectBody( fromServerRooted : Rooted ) : String =
-    s"${DirIndexRedirectStart}: ${fromServerRooted.asNotDir} -> ${fromServerRooted.asDir}"
+    s"${DirIndexRedirectStart}: ${fromServerRooted.asLeaf} -> ${fromServerRooted.asDir}"
 
 // This is a work in progress, as so far, we can't find a means of discriminating between
 // paths like /mypath and /mypath/ (and tapir seems to autoredirect to the former).

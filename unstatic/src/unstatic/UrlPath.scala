@@ -32,18 +32,18 @@ object UrlPath:
     self : T =>
     def elements: Vector[String]
     private[UrlPath] def withElements( elements : Vector[String] ) : T
-    private[UrlPath] def withRepresentsDir( isDir : Boolean ) : T
-    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], isDir : Boolean ) : T
+    private[UrlPath] def withIsDir( isDir : Boolean ) : T
+    private[UrlPath] def withElementsIsDir( elements : Vector[String], isDir : Boolean ) : T
 
     def isDir : Boolean
     def isLeaf : Boolean = !isDir
 
-    // Note: we validate in withRepresentsDir(...) to prevent invalid not-dir paths
-    def asDir : T = if this.isDir then this else this.withRepresentsDir(true)
-    def asLeaf : T = if this.isDir then this.withRepresentsDir(false) else this
+    // Note: we validate in withIsDir(...) to prevent invalid not-dir paths
+    def asDir : T = if this.isDir then this else this.withIsDir(true)
+    def asLeaf : T = if this.isDir then this.withIsDir(false) else this
 
-    def resolve(relpath: Rel): T = this.withElementsRepresentsDir( this.elements ++ relpath.elements, relpath.isDir )
-    def resolveSibling(relpath: Rel): T = this.withElementsRepresentsDir( this.elements.init ++ relpath.elements, relpath.isDir) // will throw if we're empty!
+    def resolve(relpath: Rel): T = this.withElementsIsDir( this.elements ++ relpath.elements, relpath.isDir )
+    def resolveSibling(relpath: Rel): T = this.withElementsIsDir( this.elements.init ++ relpath.elements, relpath.isDir) // will throw if we're empty!
     def resolve(relpath : String) : T = this.resolve(Rel(relpath))
     def resolveSibling(relpath : String) : T = this.resolveSibling(Rel(relpath))
     def relativize( other : T ) : UrlPath.Rel =
@@ -58,19 +58,18 @@ object UrlPath:
         s"Rooted path '${this}' would escape its root. Should not have been constructable."
       )
       this.withElements( elements )
-    def _parentOption : Option[T] =
+    def parentOption : Option[T] =
       (this.isDotty, this.isRooted) match {
         case (true, true) =>
           val check = this.elements :+ ".."
-          if Rooted.wouldEscapeRoot(check) then None else Some(this.withElements(check))
+          if Rooted.wouldEscapeRoot(check) then None else Some(this.withElementsIsDir(check, true))
         case(true, false) =>
-          Some(this.withElements(this.elements :+ ".."))
+          Some(this.withElementsIsDir(this.elements :+ "..", true))
         case (false, true) =>
-          if this.elements.nonEmpty then Some(this.withElements(this.elements.init)) else None
+          if this.elements.nonEmpty then Some(this.withElementsIsDir(this.elements.init, true)) else None
         case (false, false) =>
-          if this.elements.nonEmpty then Some(this.withElements(this.elements.init)) else Some(this.withElements(Vector("..")))
+          if this.elements.nonEmpty then Some(this.withElementsIsDir(this.elements.init, true)) else Some(this.withElementsIsDir(Vector(".."), true))
       }
-    def parentOption : Option[T] = _parentOption.map( _.asDir )
     def parent : T = parentOption.getOrElse {
       throw new BadPath("Tried to take parent of root on a rooted path.")
     }
@@ -129,9 +128,9 @@ object UrlPath:
   case class Rooted private[UrlPath] ( elements : Vector[String], isDir : Boolean ) extends PathPart[Rooted]:
     private[UrlPath] def withElements( elements : Vector[String] ) : Rooted =
       Rooted.validateCreateOrThrowMaybeSubstitute(elements, this.isDir).getOrElse(this.copy(elements = elements))
-    private[UrlPath] def withRepresentsDir( isDir : Boolean ) : Rooted =
+    private[UrlPath] def withIsDir( isDir : Boolean ) : Rooted =
       Rooted.validateCreateOrThrowMaybeSubstitute( this.elements, isDir ).getOrElse( this.copy(isDir = isDir) )
-    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], isDir : Boolean ) : Rooted =
+    private[UrlPath] def withElementsIsDir( elements : Vector[String], isDir : Boolean ) : Rooted =
       Rooted.apply( elements, isDir)
     private[UrlPath] def aboveParent : Rooted = throw new BadPath("Attempted to take the parent of a root path.")
     def unroot : Rel = Rel( this.elements )
@@ -171,9 +170,9 @@ object UrlPath:
   case class Rel private[UrlPath](elements: Vector[String], isDir : Boolean) extends PathPart[Rel]:
     private[UrlPath] def withElements( elements : Vector[String] ) : Rel =
       Rel.validateCreateOrThrowMaybeSubstitute(elements, this.isDir).getOrElse(this.copy(elements = elements))
-    private[UrlPath] def withRepresentsDir( isDir : Boolean ) : Rel =
+    private[UrlPath] def withIsDir( isDir : Boolean ) : Rel =
       Rel.validateCreateOrThrowMaybeSubstitute( this.elements, isDir).getOrElse( this.copy(isDir = isDir) )
-    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], isDir : Boolean ) : Rel =
+    private[UrlPath] def withElementsIsDir( elements : Vector[String], isDir : Boolean ) : Rel =
       Rel.apply( elements, isDir)
     def isRooted : Boolean = false
 
