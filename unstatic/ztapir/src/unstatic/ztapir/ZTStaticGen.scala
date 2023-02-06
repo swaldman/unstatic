@@ -43,7 +43,7 @@ private object ZTStaticGen:
       = staticLocationBindings.partition( slb => ignorePrefixes.exists(pfx => pfx.isPrefixOf(slb.siteRootedPath) ) )
 
     val (ungenerableEndpointBindings, generableEndpointBindings)
-      = unignoredEndpointBindings.partition( ep => ep.mbGenerator.isEmpty )
+      = unignoredEndpointBindings.partition( ep => !ep.isGenerable )
 
     // println(s"unignoredLocationBindings: " + unignoredLocationBindings.mkString(", "))
 
@@ -76,16 +76,36 @@ private object ZTStaticGen:
         _          <- ZIO.attempt( Files.writeString(destPath, contents, codec.charSet) )
       yield()
 
+    def writeBytesFor( siteRootedPath : Rooted, contents : immutable.ArraySeq[Byte] ) : Task[Unit] =
+      for
+        destParent <- findDestPathFor(siteRootedPath.parent) // will throw if root
+        destPath   <- findDestPathFor(siteRootedPath)//.debug("dest path")
+        _          <- ZIO.attempt( if !Files.exists(destParent) then Files.createDirectories(destParent) )
+        _          <- ZIO.attempt( Files.write(destPath, contents.toArray) )
+      yield()
+
+
     // note that we reverse, so that if there are conficts, early location bindings will overwrite late ones
     val locationTasks = unignoredLocationBindings.reverse.map( slb => generateLocation(slb.siteRootedPath, slb.source) )
 
     // println(s"locationTasks: " + locationTasks.mkString(", "))
 
     val endpointTasks = generableEndpointBindings.map { case generable: ZTEndpointBinding =>
-      for
-        contents <- generable.mbGenerator.get // we've already verified this is non-empty, see above
-        _ <- writeStringFor(generable.siteRootedPath, contents)
-      yield ()
+      ( generable.mbStringGenerator, generable.mbBytesGenerator ) match
+        case ( Some( stringTask ), _ ) =>
+          for
+            contents <- stringTask
+            _ <- writeStringFor(generable.siteRootedPath, contents)
+          yield ()
+        case (None, Some(bytesTask)) =>
+          for
+            contents <- bytesTask
+            _ <- writeBytesFor(generable.siteRootedPath, contents)
+          yield ()
+        case (None, None) =>
+          throw new AssertionError {
+            "An endpoint we have previously verified is generable offers no task to generate as String or bytes: " + generable
+          }
     }
     ZIO.foreachDiscard(locationTasks ++ endpointTasks)(identity).map( _ => noExceptionResult )
 

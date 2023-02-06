@@ -20,6 +20,17 @@ trait Site extends StaticLocationBinding.Source:
   def serverRootedPath( fromSiteRootedPath : Rooted ) : Rooted = basePath.embedRoot( fromSiteRootedPath )
   def serverRootedPath( fromSiteRootedPath : String ) : Rooted = serverRootedPath( Rooted(fromSiteRootedPath) )
 
+  def siteRootedPath( fromServerRootedPath : Rooted ) : Rooted =
+    if basePath.isRoot then
+      fromServerRootedPath
+    else
+      val prefix = fromServerRootedPath.elements.take(basePath.elements.length)
+      if prefix != basePath.elements then
+        throw new PathNotFromSite( s"Server rooted path '${fromServerRootedPath}' is not from site with base path '${basePath}'")
+      else
+        Rooted.fromElements(fromServerRootedPath.elements.drop(basePath.elements.length) : _*)
+  def siteRootedPath( fromServerRootedPath : String ) : Rooted = siteRootedPath( Rooted(fromServerRootedPath) )
+
   def absFromServerRooted( fromServerRootedPath : Rooted ) : Abs = serverUrl.serverRoot.embedRoot(fromServerRootedPath )
   def absFromServerRooted( fromServerRootedPath : String ) : Abs = absFromServerRooted( Rooted(fromServerRootedPath) )
 

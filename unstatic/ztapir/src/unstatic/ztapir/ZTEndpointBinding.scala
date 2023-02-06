@@ -38,11 +38,26 @@ object ZTEndpointBinding:
     publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task)
 
 
-
 case class ZTEndpointBinding( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, mbLogic : Option[ZTLogic[_,_]] ):
-  lazy val mbGenerator : Option[Task[String]] =
-    endpointStaticallyGenerableFilePath(ztServerEndpoint).flatMap { _ =>
+
+  /**
+   * Be sure to use this if you want control of the charset, otherwise you'll be stuck with UTF8 bytes
+   */
+  lazy val mbStringGenerator : Option[Task[String]] =
+    endpointStaticallyGenerableFilePath(ztServerEndpoint.endpoint).flatMap { _ =>
       mbLogic match
         case Some(us : ZTLogic.UnitString) => Some(us.task)
         case _                             => None
     }
+
+  lazy val mbBytesGenerator : Option[Task[immutable.ArraySeq[Byte]]] =
+    endpointStaticallyGenerableFilePath(ztServerEndpoint.endpoint).flatMap { _ =>
+      mbLogic match
+        case Some(us : ZTLogic.UnitString)       => Some(us.task.map(s => immutable.ArraySeq.from(s.getBytes(scala.io.Codec.UTF8.charSet))))
+        case Some(us : ZTLogic.UnitArraySeqByte) => Some(us.task)
+        case _                                   => None
+    }
+
+  def isStringGenerable : Boolean = mbStringGenerator.nonEmpty
+  def isBytesGenerable  : Boolean = mbBytesGenerator.nonEmpty
+  def isGenerable       : Boolean = isBytesGenerable

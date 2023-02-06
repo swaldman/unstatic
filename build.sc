@@ -38,6 +38,8 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
   override def scalaVersion = "3.2.1"
   override def ammoniteVersion = "2.5.6" // supports Scala 3.2.1
   // override def scalacOptions = T{ Seq("-explain") }
+  override def scalacOptions = T{ Seq("-deprecation") }
+
 
   private def pomSettings(name: String) = PomSettings(
     description = "Towards a static site generator generator (and dynamic sites too)",

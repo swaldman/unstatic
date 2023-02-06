@@ -33,9 +33,10 @@ object ZTSite:
       val DefaltServerInterpreterOptions: ZioHttpServerOptions[Any] = ZioHttpServerOptions.default.widen[Any]
       def interpreterOptions( verbose : Boolean ) = if verbose then VerboseServerInterpreterOptions else DefaltServerInterpreterOptions
       val DefaultPort = 8999
-      val Default = Dynamic(DefaultPort, DefaltServerInterpreterOptions)
+      val DefaultDirectoryIndexes = immutable.Set("index.html","index.htm","index.rss","index.xml")
+      val Default = Dynamic(DefaultPort, DefaltServerInterpreterOptions, DefaultDirectoryIndexes)
       given Config.Dynamic = Default
-    case class Dynamic( port: Int, serverInterpreterOptions: ZioHttpServerOptions[Any] )
+    case class Dynamic( port: Int, serverInterpreterOptions: ZioHttpServerOptions[Any], directoryIndexes : immutable.Set[String] )
     object Static:
       val Default = Config.Static( JPath.of("public"), Nil )
       given Config.Static = Default
@@ -51,12 +52,47 @@ object ZTSite:
   def serve(site: ZTSite)(using cfg: Config.Dynamic) =
     def buildApp(endpointSource: ZTEndpointBinding.Source): HttpApp[Any, Throwable] =
       val endpointBindings = endpointSource.endpointBindings
-      val endpoints = endpointBindings.map(_.ztServerEndpoint)
-      if (endpoints.isEmpty) throw new Exception("No endpoints defined.") //XXX: Better Exceptions
+      //val endpoints = endpointBindings.map(_.ztServerEndpoint)
+      if (endpointBindings.isEmpty) throw new NoEndpointsDefined(s"No endpoints defined to serve from site for ${site.sitePath}.")
+
+      // we need to find the directories associated with directory indexes, and create bindings for those
+      val directoryIndexDirectoryBindingsByIndexBinding =
+        endpointBindings.map( binding => endpointStaticallyGenerableFilePath( binding ) ).zip(endpointBindings)
+          .collect { case (Some( path ), binding ) => (path, binding) }
+          .filter { case (path, _) =>
+            val elements = path.elements
+            elements.nonEmpty && cfg.directoryIndexes(elements.last)
+          }
+          .map { case (dirIndexPath, fullIndexBinding) =>
+            val dirBinding =
+              val newServerRootedPath = dirIndexPath.parent.resolve("") // we want the empty string in this dir, not a file in the parent
+              val newSiteRootedPath   = site.siteRootedPath(newServerRootedPath)
+              staticallyGenerableZTEndpointBindingWithNewServerRootedPath(newServerRootedPath,site,fullIndexBinding)
+            val redirectBinding =
+              val fromServerRootedPath = dirIndexPath.parent // here we want to set handling for parent as file, no empty string to get us in the directory
+              val toServerRootedPath = dirIndexPath.parent.resolve("") // we want to go to parent as directory index, basically a file with empty string as name
+              redirectZTEndpointBinding(fromServerRootedPath, toServerRootedPath, site)
+            ( fullIndexBinding, Tuple2(redirectBinding, dirBinding) )
+          }
+          .toMap
+
+      // then we need to place the directory bindings with the index bindings to preserve
+      // the intended priority of resolution
+      val enrichedEndpointBindings =
+        endpointBindings.map { origBinding =>
+          directoryIndexDirectoryBindingsByIndexBinding.get(origBinding) match
+            case None                                   => Seq( origBinding )
+            case Some( (redirectBinding, dirBinding ) ) => Seq( origBinding, redirectBinding, dirBinding )
+        }
+        .flatten
+
+      val enrichedEndpoints = enrichedEndpointBindings.map(_.ztServerEndpoint)
+
+      enrichedEndpoints.foreach( zse => println(zse.show) )
 
       def toHttp(endpoint: ZTServerEndpoint): Http[Any, Throwable, Request, Response] = ZioHttpInterpreter(cfg.serverInterpreterOptions).toHttp(endpoint)
 
-      endpoints.tail.foldLeft(toHttp(endpoints.head))((accum, next) => accum ++ toHttp(next))
+      enrichedEndpoints.tail.foldLeft(toHttp(enrichedEndpoints.head))((accum, next) => accum ++ toHttp(next))
 
     val configLayer = ServerConfig.live(ServerConfig.default.port(cfg.port))
     val server =

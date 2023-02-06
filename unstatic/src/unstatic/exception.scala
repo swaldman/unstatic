@@ -6,6 +6,12 @@ class CannotRelativize( message : String, cause : Throwable = null)  extends Uns
 class MissingAttribute( message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
 class NoSuchEntry(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
 class BadCommandLine(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
+class NoEndpointsDefined(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
+class PathNotFromSite(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
+class NotStaticallyGenerable(message : String, cause : Throwable = null)  extends UnstaticException(message,cause)
+
+
+
 
 
 

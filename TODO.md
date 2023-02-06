@@ -1,6 +1,6 @@
 # TODO
 
- - Unified executable (server and gen)
+ - Directory indexes when serving
  - Better exceptions, search XXX and TODO
  - Add warnings in ZTStaticGen for eg root paths, 
    generableTo links that seem dir like, etc?

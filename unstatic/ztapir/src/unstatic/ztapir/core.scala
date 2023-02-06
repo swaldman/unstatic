@@ -36,6 +36,37 @@ private def errMapped[T]( task : Task[T] ) : zio.ZIO[Any,String,T] =
     sw.toString()
   }
 
+private def redirectEndpoint( fromServerRooted : Rooted, toServerRooted : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =
+  endpointForFixedPath(fromServerRooted)
+    .out(statusCode(sttp.model.StatusCode.MovedPermanently))
+    .out(header(Header.location(toServerRooted.toString())))
+
+private def redirectZTEndpointBinding( fromServerRooted : Rooted, toServerRooted : Rooted, site : Site ) : ZTEndpointBinding =
+  val endpoint = redirectEndpoint(fromServerRooted,toServerRooted)
+  val ztServerEndpoint = endpoint.zServerLogic( _ => ZIO.unit ).asInstanceOf[ZTServerEndpoint] // weird type Scala 3 tapir type inference glitch
+  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, None)
+
+private def staticallyGenerableZTEndpointBindingWithNewSiteRootedPath( newSiteRootedPath : Rooted, site : Site, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
+  val newServerRootedPath = site.serverRootedPath(newSiteRootedPath)
+  staticallyGenerableZTEndpointBinding( newSiteRootedPath, newServerRootedPath, generableBinding )
+
+private def staticallyGenerableZTEndpointBindingWithNewServerRootedPath( newServerRootedPath : Rooted, site : Site, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
+  val newSiteRootedPath = site.siteRootedPath(newServerRootedPath)
+  staticallyGenerableZTEndpointBinding( newSiteRootedPath, newServerRootedPath, generableBinding )
+
+// Careful! nothing enforces consistency of newServer and newSite rooted paths in this method!
+// Better to use one of the variants above!
+private def staticallyGenerableZTEndpointBinding( newSiteRootedPath : Rooted, newServerRootedPath : Rooted, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
+  if (!generableBinding.isGenerable) then
+    throw new NotStaticallyGenerable( s"ZTEndpointBinding ${generableBinding} is not statically generable, cannot be repurposed to generate the same document at a new fixed path." )
+  else
+    val newZTServerEndpoint =
+      val newEndpoint = endpointForFixedPath( newServerRootedPath ).errorOut(stringBody).copy(output=generableBinding.ztServerEndpoint.output)
+      val newLogicTask = (generableBinding.mbStringGenerator orElse generableBinding.mbBytesGenerator).get // since we're generable one of these must be nonEmpty
+      // since we're using both the output and type of generableBinding, we know they should be consistent
+      newEndpoint.zServerLogic( _ => errMapped(newLogicTask.asInstanceOf[zio.Task[generableBinding.ztServerEndpoint.OUTPUT]]))
+    generableBinding.copy(siteRootedPath=newSiteRootedPath, ztServerEndpoint=newZTServerEndpoint.asInstanceOf[ZTServerEndpoint])
+
 private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
@@ -44,7 +75,7 @@ private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, tas
       .out(stringBody)
   endpoint.zServerLogic( _ => errMapped(task) )
 
-// XXX: should I modify this to output immutable.Seq[Byte]?
+// XXX: should I modify this to output immutable.ArraySeq[Byte]?
 private def publicReadOnlyRssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
@@ -53,21 +84,32 @@ private def publicReadOnlyRssEndpoint( siteRootedPath: Rooted, site : Site, task
       .out(stringBody)
   endpoint.zServerLogic( _ => errMapped(task) )
 
-
-private def endpointStaticallyGenerableFilePath[R,F[_]]( serverEndpoint : ServerEndpoint[R,F] ) : Option[Rooted] =
-  endpointStaticallyGenerableFilePath(serverEndpoint.endpoint)
-
 private def staticDirectoryServingEndpoint(siteRootedPath: Rooted, site: Site, dir: JPath): ZTServerEndpoint =
   val serverRootedPath = site.serverRootedPath(siteRootedPath)
   filesGetServerEndpoint[Task](inputsForFixedPath(serverRootedPath))(dir.toAbsolutePath.toString)
 
+/**
+ *  This path is server rooted, not site rooted!
+ */
+private def endpointStaticallyGenerableFilePath( endpointBinding : ZTEndpointBinding ) : Option[Rooted] =
+  if endpointBinding.isGenerable then
+    endpointStaticallyGenerableFilePath(endpointBinding.ztServerEndpoint.endpoint)
+  else
+    None
 
+// we wouldn't know how to generate from this, though. service is opaque, buried in the ServerInterpreter
+// private def endpointStaticallyGenerableFilePath[R,F[_]]( serverEndpoint : ServerEndpoint[R,F] ) : Option[Rooted] =
+//   endpointStaticallyGenerableFilePath(serverEndpoint.endpoint)
+
+/**
+ *  This path is server rooted, not site rooted!
+ */
 private def endpointStaticallyGenerableFilePath[SECURITY_INPUT, INPUT, ERROR_OUTPUT, OUTPUT, R]( endpoint : Endpoint[SECURITY_INPUT, INPUT, ERROR_OUTPUT, OUTPUT, R] ) : Option[Rooted] =
   val inputs = endpoint.asVectorOfBasicInputs(includeAuth = true)
   val acceptableInputs = inputs.collect {
-    case a : EndpointInput.FixedPath[_]                                                                           => a
+    case a : EndpointInput.FixedPath[_]                                                              => a
     case b @ EndpointInput.FixedMethod(Method(methodName),_,_) if methodName.equalsIgnoreCase("GET") => b
-    case c : EndpointIO.Empty[_]                                                                                  => c
+    case c : EndpointIO.Empty[_]                                                                     => c
   }
   if (inputs.size != acceptableInputs.size) // we have some unacceptable inputs
     // println("Unacceptable inputs: " + inputs.filter( inp => !acceptableInputs.contains(inp) ).mkString(", "))
