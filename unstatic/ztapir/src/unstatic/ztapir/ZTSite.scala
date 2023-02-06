@@ -56,7 +56,7 @@ object ZTSite:
       if (endpointBindings.isEmpty) throw new NoEndpointsDefined(s"No endpoints defined to serve from site for ${site.sitePath}.")
 
       // we need to find the directories associated with directory indexes, and create bindings for those
-      val directoryIndexDirectoryBindingsByIndexBinding =
+      val directoryIndexDirectoryBindingByIndexBinding =
         endpointBindings.map( binding => endpointStaticallyGenerableFilePath( binding ) ).zip(endpointBindings)
           .collect { case (Some( path ), binding ) => (path, binding) }
           .filter { case (path, _) =>
@@ -64,15 +64,27 @@ object ZTSite:
             elements.nonEmpty && cfg.directoryIndexes(elements.last)
           }
           .map { case (dirIndexPath, fullIndexBinding) =>
+/*
             val dirBinding =
-              val newServerRootedPath = dirIndexPath.parent.resolve("") // we want the empty string in this dir, not a file in the parent
-              val newSiteRootedPath   = site.siteRootedPath(newServerRootedPath)
+              val newServerRootedPath = dirIndexPath.parent // parent will represent the directory
               staticallyGenerableZTEndpointBindingWithNewServerRootedPath(newServerRootedPath,site,fullIndexBinding)
             val redirectBinding =
-              val fromServerRootedPath = dirIndexPath.parent // here we want to set handling for parent as file, no empty string to get us in the directory
-              val toServerRootedPath = dirIndexPath.parent.resolve("") // we want to go to parent as directory index, basically a file with empty string as name
+              val fromServerRootedPath = dirIndexPath.parent.asNotDir // here we want to set handling for parent as file, no empty string to get us into the directory
+              val toServerRootedPath = dirIndexPath.parent // we want to go to parent as directory index
               redirectZTEndpointBinding(fromServerRootedPath, toServerRootedPath, site)
             ( fullIndexBinding, Tuple2(redirectBinding, dirBinding) )
+*/
+/*
+            val redirectBinding =
+              val fromServerRootedPath = dirIndexPath.parent.asNotDir
+              redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRootedPath, site )
+            ( fullIndexBinding, redirectBinding )
+*/
+            val redirectBinding =
+              val fromServerRootedPath = dirIndexPath.parent
+              val toServerRootedPath = dirIndexPath
+              redirectZTEndpointBinding( fromServerRootedPath, toServerRootedPath, site )
+            ( fullIndexBinding, redirectBinding )
           }
           .toMap
 
@@ -80,9 +92,9 @@ object ZTSite:
       // the intended priority of resolution
       val enrichedEndpointBindings =
         endpointBindings.map { origBinding =>
-          directoryIndexDirectoryBindingsByIndexBinding.get(origBinding) match
-            case None                                   => Seq( origBinding )
-            case Some( (redirectBinding, dirBinding ) ) => Seq( origBinding, redirectBinding, dirBinding )
+          directoryIndexDirectoryBindingByIndexBinding.get(origBinding) match
+            case None                    => Seq( origBinding )
+            case Some( redirectBinding ) => Seq( origBinding, redirectBinding )
         }
         .flatten
 
