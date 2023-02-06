@@ -9,7 +9,6 @@ object UrlPath:
     def apply( url : String ) : Abs = apply(URL(url))
     def apply( url : URL    ) : Abs = Abs(URL(url,"/"), Rooted.parse(url.getPath) )
   final case class Abs private[UrlPath] ( server : URL, path : Rooted ) extends UrlPath:
-    def representsDir = path.representsDir
     def serverRoot : Abs = this.copy(path = Rooted.root)
     def resolve(relpath: UrlPath.Rel): Abs = this.copy( path = path.resolve(relpath) )
     def resolveSibling(relpath: UrlPath.Rel): Abs = this.copy( path = path.resolveSibling(relpath) )
@@ -23,26 +22,33 @@ object UrlPath:
     def parent : Abs = parentOption.getOrElse {
       throw new BadPath("Tried to take parent of server root on an absolute UrlPath.")
     }
+    def isDir = path.isDir
+    def isLeaf = !isDir
+    def asDir : Abs = if path.isDir then this else this.copy( path = path.asDir )
+    def asLeaf : Abs = if path.isDir then this.copy( path = path.asLeaf ) else this
     override def toString() : String = server.toString() + path.toString().substring(1)
 
   trait PathPart[T <: PathPart[T]] extends UrlPath:
     self : T =>
     def elements: Vector[String]
     private[UrlPath] def withElements( elements : Vector[String] ) : T
-    private[UrlPath] def withRepresentsDir( representsDir : Boolean ) : T
-    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], representsDir : Boolean ) : T
+    private[UrlPath] def withRepresentsDir( isDir : Boolean ) : T
+    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], isDir : Boolean ) : T
+
+    def isDir : Boolean
+    def isLeaf : Boolean = !isDir
 
     // Note: we validate in withRepresentsDir(...) to prevent invalid not-dir paths
-    def asDir : T = if this.representsDir then this else this.withRepresentsDir(true)
-    def asNotDir : T = if this.representsDir then this.withRepresentsDir(false) else this
+    def asDir : T = if this.isDir then this else this.withRepresentsDir(true)
+    def asLeaf : T = if this.isDir then this.withRepresentsDir(false) else this
 
-    def resolve(relpath: Rel): T = this.withElementsRepresentsDir( this.elements ++ relpath.elements, relpath.representsDir )
-    def resolveSibling(relpath: Rel): T = this.withElementsRepresentsDir( this.elements.init ++ relpath.elements, relpath.representsDir) // will throw if we're empty!
+    def resolve(relpath: Rel): T = this.withElementsRepresentsDir( this.elements ++ relpath.elements, relpath.isDir )
+    def resolveSibling(relpath: Rel): T = this.withElementsRepresentsDir( this.elements.init ++ relpath.elements, relpath.isDir) // will throw if we're empty!
     def resolve(relpath : String) : T = this.resolve(Rel(relpath))
     def resolveSibling(relpath : String) : T = this.resolveSibling(Rel(relpath))
     def relativize( other : T ) : UrlPath.Rel =
       val shared = this.elements.zip(other.elements).takeWhile(tup => tup(0) == tup(1)).map(_(0))
-      Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements.drop(shared.length), other.representsDir )
+      Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements.drop(shared.length), other.isDir )
     def relativizeSibling( other : T ) : UrlPath.Rel = this.parent.relativize(other)
     def embedRoot(rooted : UrlPath.Rooted) : T = resolve(rooted.unroot)
     def canonical : T =
@@ -70,7 +76,7 @@ object UrlPath:
     }
     def isDotty : Boolean = elements.exists( e => e == "." || e == ".." )
     def isRooted : Boolean
-    override def toString() : String = if elements.nonEmpty && representsDir then elements.mkString("","/","/") else elements.mkString("/")
+    override def toString() : String = if elements.nonEmpty && isDir then elements.mkString("","/","/") else elements.mkString("/")
   end PathPart
 
   object Rooted:
@@ -78,8 +84,8 @@ object UrlPath:
       if strict && (path.isEmpty || path(0) != '/') then
         throw new BadPath(s"Putative rooted path '${path}' must begin with '/'.")
       val realElements = path.split("""\/+""").filter(_.nonEmpty).to(Vector)
-      val representsDir = path.endsWith("/") || path.isEmpty || dottyLast(realElements)
-      ( realElements, representsDir )
+      val isDir = path.endsWith("/") || path.isEmpty || dottyLast(realElements)
+      ( realElements, isDir )
 
     private[UrlPath] def wouldEscapeRoot( elements : Vector[String]) : Boolean = dotDotHead(_dedottifySuffix(elements))
 
@@ -94,11 +100,11 @@ object UrlPath:
 
     def fromElements( elements : String* ) : Rooted = apply(elements.toVector)
     def parseAndRoot( path : String) : Rooted =
-      val ( elements, representsDir ) = preparse(path, false)
-      Rooted( elements, representsDir )
+      val ( elements, isDir ) = preparse(path, false)
+      Rooted( elements, isDir )
     def parse( path : String ) : Rooted =
-      val ( elements, representsDir ) = preparse(path, true)
-      Rooted( elements, representsDir )
+      val ( elements, isDir ) = preparse(path, true)
+      Rooted( elements, isDir )
     def apply( path : String ) : Rooted = Rooted.parse(path)
     def apply( elements : Vector[String] ) : Rooted =
       val realElements = elements.filter( _.nonEmpty ).to(Vector)
@@ -108,25 +114,25 @@ object UrlPath:
         if dottyLast(elements) then new Rooted(realElements, true) else new Rooted( realElements, false )
     // guard all constructor and copy calls (except those of root!) with this to prevent the
     // possibility of invalid Rooteds
-    private[UrlPath] def validateCreateOrThrowMaybeSubstitute( elements : Vector[String], representsDir : Boolean ) : Option[Rooted] =
+    private[UrlPath] def validateCreateOrThrowMaybeSubstitute( elements : Vector[String], isDir : Boolean ) : Option[Rooted] =
       if elements.isEmpty then
-        if representsDir then Some(root) else throw new MustRepresentDirectory("Cannot create root (empty path) element that does not represent a directory")
+        if isDir then Some(root) else throw new MustRepresentDirectory("Cannot create root (empty path) element that does not represent a directory")
       else
         val last = elements.last
-        if !representsDir && (last == "." || last == "..") then
+        if !isDir && (last == "." || last == "..") then
           throw new MustRepresentDirectory("A path ending in '.' or '..' must represent a directory.")
         else
           guard(elements)
         None
-    def apply( elements : Vector[String], representsDir : Boolean ) : Rooted =
-      validateCreateOrThrowMaybeSubstitute(elements, representsDir).getOrElse( new Rooted( elements, representsDir ) )
-  case class Rooted private[UrlPath] ( elements : Vector[String], representsDir : Boolean ) extends PathPart[Rooted]:
+    def apply( elements : Vector[String], isDir : Boolean ) : Rooted =
+      validateCreateOrThrowMaybeSubstitute(elements, isDir).getOrElse( new Rooted( elements, isDir ) )
+  case class Rooted private[UrlPath] ( elements : Vector[String], isDir : Boolean ) extends PathPart[Rooted]:
     private[UrlPath] def withElements( elements : Vector[String] ) : Rooted =
-      Rooted.validateCreateOrThrowMaybeSubstitute(elements, this.representsDir).getOrElse(this.copy(elements = elements))
-    private[UrlPath] def withRepresentsDir( representsDir : Boolean ) : Rooted =
-      Rooted.validateCreateOrThrowMaybeSubstitute( this.elements, representsDir ).getOrElse( this.copy(representsDir = representsDir) )
-    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], representsDir : Boolean ) : Rooted =
-      Rooted.apply( elements, representsDir)
+      Rooted.validateCreateOrThrowMaybeSubstitute(elements, this.isDir).getOrElse(this.copy(elements = elements))
+    private[UrlPath] def withRepresentsDir( isDir : Boolean ) : Rooted =
+      Rooted.validateCreateOrThrowMaybeSubstitute( this.elements, isDir ).getOrElse( this.copy(isDir = isDir) )
+    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], isDir : Boolean ) : Rooted =
+      Rooted.apply( elements, isDir)
     private[UrlPath] def aboveParent : Rooted = throw new BadPath("Attempted to take the parent of a root path.")
     def unroot : Rel = Rel( this.elements )
     def isPrefixOf(other : Rooted) =
@@ -141,32 +147,34 @@ object UrlPath:
         throw new BadPath(s"Putative relative (unrooted) path '${path}' must not begin with '/'.")
       else
         val realElements = path.split("""\/+""").filter(_.nonEmpty).to(Vector)
-        val representsDir = path.endsWith("/") || path.isEmpty || dottyLast(realElements)
-        ( realElements, representsDir )
+        val isDir = path.endsWith("/") || path.isEmpty || dottyLast(realElements)
+        ( realElements, isDir )
     def parse( path : String ) : Rel =
-      val (elements, representsDir ) = preparse(path)
-      apply( elements, representsDir )
+      val (elements, isDir ) = preparse(path)
+      apply( elements, isDir )
     def apply( path : String ) : Rel = parse(path)
     def apply( elements : Vector[String] ) : Rel =
-      if elements.isEmpty then here else apply( elements, false )
-    private[UrlPath] def validateCreateOrThrowMaybeSubstitute( elements : Vector[String], representsDir : Boolean ) : Option[Rel] =
+      if elements.isEmpty then here else if dottyLast(elements) then apply(elements, true) else apply( elements, false )
+    private[UrlPath] def validateCreateOrThrowMaybeSubstitute( elements : Vector[String], isDir : Boolean ) : Option[Rel] =
       if elements.isEmpty then
-        if representsDir then Some(here) else throw new MustRepresentDirectory("An empty UrlPath.Rel can only represent a directory!")
+        if isDir then Some(here) else throw new MustRepresentDirectory("An empty UrlPath.Rel can only represent a directory!")
+      else if !isDir && dottyLast(elements) then
+        throw new MustRepresentDirectory("UrlPath.Rel that end in '.' or '..' must represent directories.")
       else
         None
-    def apply( elements : Vector[String], representsDir : Boolean ) : Rel =
-      validateCreateOrThrowMaybeSubstitute( elements, representsDir ).getOrElse(new Rel( elements, representsDir ))
+    def apply( elements : Vector[String], isDir : Boolean ) : Rel =
+      validateCreateOrThrowMaybeSubstitute( elements, isDir ).getOrElse(new Rel( elements, isDir ))
     def fromElements( elements : String* ) : Rel =
       val realElements = elements.filter( _.nonEmpty ).to(Vector)
       if realElements.isEmpty then here else Rel( realElements, false )
     val here = new Rel(Vector.empty, true) // use the raw constructor to avoid endless recursion in apply
-  case class Rel private[UrlPath](elements: Vector[String], representsDir : Boolean) extends PathPart[Rel]:
+  case class Rel private[UrlPath](elements: Vector[String], isDir : Boolean) extends PathPart[Rel]:
     private[UrlPath] def withElements( elements : Vector[String] ) : Rel =
-      Rel.validateCreateOrThrowMaybeSubstitute(elements, this.representsDir).getOrElse(this.copy(elements = elements))
-    private[UrlPath] def withRepresentsDir( representsDir : Boolean ) : Rel =
-      Rel.validateCreateOrThrowMaybeSubstitute( this.elements, representsDir).getOrElse( this.copy(representsDir = representsDir) )
-    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], representsDir : Boolean ) : Rel =
-      Rel.apply( elements, representsDir)
+      Rel.validateCreateOrThrowMaybeSubstitute(elements, this.isDir).getOrElse(this.copy(elements = elements))
+    private[UrlPath] def withRepresentsDir( isDir : Boolean ) : Rel =
+      Rel.validateCreateOrThrowMaybeSubstitute( this.elements, isDir).getOrElse( this.copy(isDir = isDir) )
+    private[UrlPath] def withElementsRepresentsDir( elements : Vector[String], isDir : Boolean ) : Rel =
+      Rel.apply( elements, isDir)
     def isRooted : Boolean = false
 
   private val SomeDotDot = Some("..")
@@ -224,7 +232,7 @@ object UrlPath:
     else Rooted(path)
 
 sealed trait UrlPath:
-  def representsDir : Boolean
+  def isDir : Boolean
   def resolve(relpath: UrlPath.Rel): UrlPath
   def resolveSibling(relpath: UrlPath.Rel): UrlPath
   def embedRoot(rooted : UrlPath.Rooted): UrlPath

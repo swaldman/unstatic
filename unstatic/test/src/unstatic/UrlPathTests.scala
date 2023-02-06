@@ -42,4 +42,32 @@ object UrlPathTests extends TestSuite:
       test - assert( doesThrow[BadPath](Rooted.root.parent) )
       test - assert( doesThrow[BadPath](Rooted("/hello").parent.parent) )
     }
+    test("UrlPath.Rooted.isDir") {
+      test - assert( doesThrow[MustRepresentDirectory](Rooted(Vector.empty, false)) )
+      test - assert( doesThrow[MustRepresentDirectory](Rooted(Vector("."), false)) )
+      test - assert( doesThrow[MustRepresentDirectory](Rooted(Vector("dir",".."), false)) )
+      test - assert( Rooted(Vector.empty, true) == Rooted.root )
+      test - assert( Rooted(Vector.empty, true).toString() == "/" )
+      test - assert( Rooted(Vector("dir"), false).toString() == "/dir" )
+      test - assert( Rooted(Vector("dir"), true).toString() == "/dir/" )
+      test - assert( Rooted(Vector("dir"), true).parent == Rooted.root )
+      test - assert( Rooted(Vector("dir","subdir"), false).toString() == "/dir/subdir" )
+      test - assert( Rooted(Vector("dir","subdir"), false).asDir.toString() == "/dir/subdir/" )
+      test - assert( Rooted(Vector("dir","subdir"), false).parent.toString() == "/dir/" )
+      test - assert( Rooted(Vector("dir","subdir"), false).parent.asLeaf.toString() == "/dir" )
+    }
+    test("UrlPath.Rel.isDir") {
+      test - assert( doesThrow[MustRepresentDirectory](Rel(Vector.empty, false)) )
+      test - assert( doesThrow[MustRepresentDirectory](Rel(Vector("."), false)) )
+      test - assert( doesThrow[MustRepresentDirectory](Rel(Vector("dir",".."), false)) )
+      test - assert( Rel(Vector.empty, true) == Rel.here )
+      test - assert( Rel(Vector.empty, true).toString() == "" )
+      test - assert( Rel(Vector("dir"), false).toString() == "dir" )
+      test - assert( Rel(Vector("dir"), true).toString() == "dir/" )
+      test - assert( Rel(Vector("dir"), true).parent == Rel.here )
+      test - assert( Rel(Vector("dir","subdir"), false).toString() == "dir/subdir" )
+      test - assert( Rel(Vector("dir","subdir"), false).asDir.toString() == "dir/subdir/" )
+      test - assert( Rel(Vector("dir","subdir"), false).parent.toString() == "dir/" )
+      test - assert( Rel(Vector("dir","subdir"), false).parent.asLeaf.toString() == "dir" )
+    }
   }
