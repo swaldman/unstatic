@@ -16,27 +16,12 @@ import java.nio.file.Path as JPath
 object ZTSite:
   object Config:
     object Dynamic:
-      val VerboseServerInterpreterOptions: ZioHttpServerOptions[Any] =
-      // modified from https://github.com/longliveenduro/zio-geolocation-tapir-tapir-starter/blob/b79c88b9b1c44a60d7c547d04ca22f12f420d21d/src/main/scala/com/tsystems/toil/Main.scala
-        ZioHttpServerOptions
-          .customiseInterceptors
-          .serverLog(
-            DefaultServerLog[Task](
-              doLogWhenReceived = msg => ZIO.succeed(println(msg)),
-              doLogWhenHandled = (msg, error) => ZIO.succeed(error.fold(println(msg))(err => println(s"msg: ${msg}, err: ${err}"))),
-              doLogAllDecodeFailures = (msg, error) => ZIO.succeed(error.fold(println(msg))(err => println(s"msg: ${msg}, err: ${err}"))),
-              doLogExceptions = (msg: String, exc: Throwable) => ZIO.succeed(println(s"msg: ${msg}, exc: ${exc}")),
-              noLog = ZIO.unit
-            )
-          )
-          .options
-      val DefaltServerInterpreterOptions: ZioHttpServerOptions[Any] = ZioHttpServerOptions.default.widen[Any]
-      def interpreterOptions( verbose : Boolean ) = if verbose then VerboseServerInterpreterOptions else DefaltServerInterpreterOptions
       val DefaultPort = 8999
+      val DefaultVerbose = false
       val DefaultDirectoryIndexes = immutable.Set("index.html","index.htm","index.rss","index.xml")
-      val Default = Dynamic(DefaultPort, DefaltServerInterpreterOptions, DefaultDirectoryIndexes)
+      val Default = Dynamic(DefaultPort, DefaultVerbose, DefaultDirectoryIndexes)
       given Config.Dynamic = Default
-    case class Dynamic( port: Int, serverInterpreterOptions: ZioHttpServerOptions[Any], directoryIndexes : immutable.Set[String] )
+    case class Dynamic( port: Int, verbose: Boolean, directoryIndexes : immutable.Set[String] )
     object Static:
       val Default = Config.Static( JPath.of("public"), Nil )
       given Config.Static = Default
@@ -48,6 +33,23 @@ object ZTSite:
     cfgStatic  : Config.Static  = Config.Static.Default,
     cfgDynamic : Config.Dynamic = Config.Dynamic.Default,
   )
+
+  val VerboseServerInterpreterOptions: ZioHttpServerOptions[Any] =
+  // modified from https://github.com/longliveenduro/zio-geolocation-tapir-tapir-starter/blob/b79c88b9b1c44a60d7c547d04ca22f12f420d21d/src/main/scala/com/tsystems/toil/Main.scala
+    ZioHttpServerOptions
+      .customiseInterceptors
+      .serverLog(
+        DefaultServerLog[Task](
+          doLogWhenReceived = msg => ZIO.succeed(println(msg)),
+          doLogWhenHandled = (msg, error) => ZIO.succeed(error.fold(println(msg))(err => println(s"msg: ${msg}, err: ${err}"))),
+          doLogAllDecodeFailures = (msg, error) => ZIO.succeed(error.fold(println(msg))(err => println(s"msg: ${msg}, err: ${err}"))),
+          doLogExceptions = (msg: String, exc: Throwable) => ZIO.succeed(println(s"msg: ${msg}, exc: ${exc}")),
+          noLog = ZIO.unit
+        )
+      )
+      .options
+  val DefaltServerInterpreterOptions: ZioHttpServerOptions[Any] = ZioHttpServerOptions.default.widen[Any]
+  def interpreterOptions( verbose : Boolean ) = if verbose then VerboseServerInterpreterOptions else DefaltServerInterpreterOptions
 
   def serve(site: ZTSite)(using cfg: Config.Dynamic) =
     def buildApp(endpointSource: ZTEndpointBinding.Source): HttpApp[Any, Throwable] =
@@ -100,9 +102,11 @@ object ZTSite:
 
       val enrichedEndpoints = enrichedEndpointBindings.map(_.ztServerEndpoint)
 
-      enrichedEndpoints.foreach( zse => println(zse.show) )
+      if cfg.verbose then
+        scala.Console.err.println("Endpoints to serve:")
+        enrichedEndpoints.foreach( zse => scala.Console.err.println( "  - " + zse.show) )
 
-      def toHttp(endpoint: ZTServerEndpoint): Http[Any, Throwable, Request, Response] = ZioHttpInterpreter(cfg.serverInterpreterOptions).toHttp(endpoint)
+      def toHttp(endpoint: ZTServerEndpoint): Http[Any, Throwable, Request, Response] = ZioHttpInterpreter(interpreterOptions(cfg.verbose)).toHttp(endpoint)
 
       enrichedEndpoints.tail.foldLeft(toHttp(enrichedEndpoints.head))((accum, next) => accum ++ toHttp(next))
 
@@ -136,7 +140,8 @@ object ZTSite:
                  .text("the output directory, into which the site will be generated"),
                opt[scala.Seq[String]]("no-gen-prefixes")
                  .action((x, cfg) => cfg.copy( cfgStatic = cfg.cfgStatic.copy(noGenPrefixes = x.map(Rooted.parse)) ) )
-                 .valueName("<path1>,<path2>,...")
+                 .text("prefixes for paths that should be ignored (skipped) for static generation")
+                 .valueName("<path1>,<path2>,..."),
             ),
           cmd(Config.Command.serve.toString)
             .text("serve site dynamically")
@@ -144,9 +149,15 @@ object ZTSite:
             .children(
               opt[Int]('p', "port")
                 .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(port = x) ) )
+                .valueName("<port-number>")
                 .text("the port on which to serve HTTP"),
               opt[Unit]("verbose")
-                .action( (_, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(serverInterpreterOptions = Config.Dynamic.VerboseServerInterpreterOptions) ) )
+                .action( (_, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(verbose = true) ) )
+                .text("emit verbose debugging output to stderr"),
+               opt[scala.Seq[String]]("directory-indexes")
+                 .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(directoryIndexes = x.toSet) ) )
+                 .text("names that can represent content of parent dir path")
+                 .valueName("index.html,index.htm,..."),
             ),
           cmd(Config.Command.hybrid.toString)
             .text("generate partial site and serve rest dynamically")
@@ -158,12 +169,19 @@ object ZTSite:
                  .text("the output directory, into which the site will be generated"),
                opt[scala.Seq[String]]("no-gen-prefixes")
                  .action( (x, cfg) => cfg.copy( cfgStatic = cfg.cfgStatic.copy(noGenPrefixes = x.map(Rooted.parse)) ) )
+                 .text("prefixes for paths that should be ignored (skipped) for static generation")
                  .valueName("<path1>,<path2>,..."),
-              opt[Int]('p', "port")
+               opt[scala.Seq[String]]("directory-indexes")
+                 .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(directoryIndexes = x.toSet) ) )
+                 .text("names that can represent content of parent dir path")
+                 .valueName("index.html,index.htm,..."),
+               opt[Int]('p', "port")
                 .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(port = x) ) )
+                .valueName("<port-number>")
                 .text("the port on which to serve HTTP"),
               opt[Unit]("verbose")
-                .action( (_, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(serverInterpreterOptions = Config.Dynamic.VerboseServerInterpreterOptions) ) )
+                .action( (_, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(verbose = true) ) )
+                .text("emit verbose debugging output to stderr"),
             )
        )
       OParser.parse(parser1, args, Config()) match
