@@ -27,7 +27,8 @@ trait SimpleBlog extends ZTBlog:
       mediaLocation : SiteLocation,
       inferredInfo : Entry.Info,
       presentation : Entry.Presentation
-    )
+    ):
+      def entryById( id : String ) : EntryResolved = SimpleBlog.this.entryById(id)
   end Entry
   object Layout:
     object Input:
