@@ -200,14 +200,16 @@ object ZTSite:
             _            <- serveTask
           yield staticResult
 
-    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }
+    override def run = runTask(LogLevel.Info).catchSome{ case _ : BadCommandLine => ZIO.unit }
 
-    val runTask =
-      for
-        args <- getArgs
-        cfg  <- ZIO.attempt( config(args.toArray) )
-        _    <- work(cfg).debug.exitCode
-      yield ()
+    def runTask( level : LogLevel ) =
+      ZIO.logLevel(level) {
+        for
+          args <- getArgs
+          cfg <- ZIO.attempt(config(args.toArray))
+          _ <- work(cfg).debug.exitCode
+        yield ()
+      }
   end Main
 
   trait Composite extends ZTSite with Site.Composite:

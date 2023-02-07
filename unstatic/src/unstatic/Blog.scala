@@ -3,7 +3,12 @@ package unstatic
 import scala.collection.*
 import scala.annotation.tailrec
 
+object Blog:
+  enum EntryPresentation:
+    case Single, Multiple, Rss
 trait Blog:
+  import Blog.EntryPresentation
+
   type Site <: unstatic.Site
   type EntryInfo
   type EntryInput
@@ -36,7 +41,7 @@ trait Blog:
   lazy val entriesResolved : immutable.SortedSet[EntryResolved] =
     entryUntemplates.map(ut => EntryResolved(entryInfo(ut), ut)).to(immutable.SortedSet)
 
-  def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput
+  def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : EntryPresentation ) : EntryInput
 
   def entryIds( entryResolved : EntryResolved ) : List[String] =
     val fqn = entryResolved.entryUntemplate.UntemplateFullyQualifiedName

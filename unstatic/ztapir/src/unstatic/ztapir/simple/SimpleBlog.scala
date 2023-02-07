@@ -9,6 +9,8 @@ import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 
 trait SimpleBlog extends ZTBlog:
   object Entry:
+    val Presentation  = Blog.EntryPresentation
+    type Presentation = Blog.EntryPresentation
     final case class Info (
       mbTitle : Option[String],
       authors : Seq[String],
@@ -24,12 +26,12 @@ trait SimpleBlog extends ZTBlog:
       renderLocation : SiteLocation,
       mediaLocation : SiteLocation,
       inferredInfo : Entry.Info,
-      presentationMultiple : Boolean
+      presentation : Entry.Presentation
     )
   end Entry
   object Layout:
     object Input:
-      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, mbTitle : Option[String], authors : Seq[String], tags : Seq[String], pubDate : Instant, permalinkLocation : SiteLocation, presentationMultiple : Boolean )
+      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, mbTitle : Option[String], authors : Seq[String], tags : Seq[String], pubDate : Instant, permalinkLocation : SiteLocation, presentation : SimpleBlog.this.Entry.Presentation )
       case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String )
     end Input
   end Layout
@@ -46,7 +48,7 @@ trait SimpleBlog extends ZTBlog:
     val entryInfo = resolved.entryInfo
     val entryUntemplate = resolved.entryUntemplate
     val absPermalink = site.absFromSiteRooted(resolved.entryInfo.permalinkPathSiteRooted)
-    val permalinkRelativeHtml = renderSingleFragment(SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, false)
+    val permalinkRelativeHtml = renderSingleFragment(SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, Entry.Presentation.Rss)
     val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
     val jsoupDocAbsolutized = resolveRelativeUrls(jsoupDoc)
     val absolutizedHtml = jsoupDocAbsolutized.body().html
@@ -178,8 +180,8 @@ trait SimpleBlog extends ZTBlog:
     Entry.Info(mbTitle, authors, tags, pubDate, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
-  def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : EntryInput =
-    Entry.Input( this, site, renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), resolved.entryInfo, presentationMultiple )
+  def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : EntryInput =
+    Entry.Input( this, site, renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), resolved.entryInfo, presentation )
 
   def permalink( resolved : EntryResolved ) : SiteLocation = SiteLocation( resolved.entryInfo.permalinkPathSiteRooted, site )
 
@@ -194,25 +196,25 @@ trait SimpleBlog extends ZTBlog:
 
   // TODO: Consider memoizing, since we will do this at least twice at permalink location
   //       (once for permalink, once for feed)
-  def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentationMultiple : Boolean ) : String =
+  def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : String =
     val htmlifier = HtmlifierForContentType(resolved.entryInfo.contentType)
-    val ei = entryInput( renderLocation, resolved, presentationMultiple )
+    val ei = entryInput( renderLocation, resolved, presentation )
     val result = resolved.entryUntemplate(ei)
     val htmlifierOptions = Htmlifier.Options(generatorFullyQualifiedName = Some(resolved.entryUntemplate.UntemplateFullyQualifiedName))
     val htmlResult = htmlifier(result.text, htmlifierOptions)
     val info = resolved.entryInfo
-    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, info.mbTitle, info.authors, info.tags, info.pubDate, SiteLocation(info.permalinkPathSiteRooted,site), presentationMultiple )
+    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, info.mbTitle, info.authors, info.tags, info.pubDate, SiteLocation(info.permalinkPathSiteRooted,site), presentation )
     layoutEntry( layoutEntryInput )
 
   def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String =
-    val entry = renderSingleFragment(renderLocation, resolved, false)
+    val entry = renderSingleFragment(renderLocation, resolved, Entry.Presentation.Single)
     val layoutPageInput = Layout.Input.Page(this, site, renderLocation, entry)
     layoutPage( layoutPageInput )
 
   def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String =
     // println("renderMultiple(...)")
     // resolveds.foreach( r => println(s"${r.entryUntemplate} -- ${r.entryInfo.pubDate}") )
-    val fragmentTexts = resolveds.map(resolved => renderSingleFragment(renderLocation, resolved, true))
+    val fragmentTexts = resolveds.map(resolved => renderSingleFragment(renderLocation, resolved, Entry.Presentation.Multiple))
     val unifiedFragmentTexts = fragmentTexts.mkString(entrySeparator)
     val layoutPageInput = Layout.Input.Page(this, site, renderLocation, unifiedFragmentTexts)
     layoutPage( layoutPageInput )
