@@ -2,9 +2,10 @@ package unstatic.ztapir
 
 import scala.collection.*
 import sttp.tapir.ztapir.*
-import sttp.tapir.{Endpoint, EndpointIO, EndpointInput}
+import sttp.tapir.{Endpoint, EndpointIO, EndpointInput, EndpointOutput}
 import sttp.tapir.internal.RichEndpoint
 import sttp.model.{Header, MediaType, Method, StatusCode}
+import sttp.tapir.EndpointOutput.MappedPair
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.ziohttp.ZioHttpToResponseBody
 import unstatic.*
@@ -12,6 +13,8 @@ import unstatic.UrlPath.*
 import zio.*
 
 import java.nio.file.Path as JPath
+
+import EndpointOutput.{Pair, MappedPair}
 
 type ZTServerEndpoint = ZServerEndpoint[Any,Any] //ServerEndpoint[Any,[t] =>> ZIO[Any,String,t]]
 
@@ -60,6 +63,11 @@ private def directoryRedirectBody( fromServerRooted : Rooted ) : String =
 // paths like /mypath and /mypath/ (and tapir seems to autoredirect to the former).
 //
 // We see from .in(extractFromRequest( _.showShort )) only strings like GET /mypath
+//
+// See https://softwaremill.community/t/distinguishing-directory-ish-from-file-ish-paths-for-directory-indexes/120
+//
+// It's pretty clear how to complete this (with two endpoints, redirectFrom with no slash, redirect to with one).
+
 private def redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRooted : Rooted, site : Site ) : ZTEndpointBinding =
   val endpoint =
     endpointForFixedPath(fromServerRooted)
@@ -79,7 +87,7 @@ private def redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRooted : 
   )
   val logic : String => Task[String] = (s : String) => ZIO.attempt(s)
   val ztServerEndpoint = endpoint.zServerLogic(errMapped[String,String](logic)).glitchWiden
-  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)))
+  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), SomeUTF8) // the HTML is marked UTF8
 
 private def redirectEndpoint( fromServerRooted : Rooted, toServerRooted : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =
   endpointForFixedPath(fromServerRooted)
@@ -89,12 +97,13 @@ private def redirectEndpoint( fromServerRooted : Rooted, toServerRooted : Rooted
 private val UnitTask = ZIO.attempt( () )
 
 private val CharsetUTF8 = scala.io.Codec.UTF8.charSet
+private val SomeUTF8    = Some(CharsetUTF8)
 
 private def redirectZTEndpointBinding( fromServerRooted : Rooted, toServerRooted : Rooted, site : Site ) : ZTEndpointBinding =
   val endpoint = redirectEndpoint(fromServerRooted,toServerRooted)
   val logic : Unit => ZIO[Any,Throwable,Unit] =  _ => UnitTask
   val ztServerEndpoint = endpoint.zServerLogic( logic.andThen(_.mapError(_ => ()) ) ).glitchWiden
-  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)))
+  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), None)
 
 private def staticallyGenerableZTEndpointBindingWithNewSiteRootedPath( newSiteRootedPath : Rooted, site : Site, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
   val newServerRootedPath = site.serverRootedPath(newSiteRootedPath)
@@ -117,7 +126,7 @@ private def staticallyGenerableZTEndpointBindingWithNewPath( newSiteRootedPath :
       newEndpoint.zServerLogic( _ => errMapped(newLogicTask.asInstanceOf[zio.Task[generableBinding.ztServerEndpoint.OUTPUT]]))
     generableBinding.copy(siteRootedPath=newSiteRootedPath, ztServerEndpoint=newZTServerEndpoint.asInstanceOf[ZTServerEndpoint])
 
-private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
+private def publicReadOnlyUtf8HtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
       .errorOut(stringBody(CharsetUTF8))
@@ -126,7 +135,7 @@ private def publicReadOnlyHtmlEndpoint( siteRootedPath: Rooted, site : Site, tas
   endpoint.zServerLogic( _ => errMapped(task) )
 
 // XXX: should I modify this to output immutable.ArraySeq[Byte]?
-private def publicReadOnlyRssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
+private def publicReadOnlyUtf8RssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
       .errorOut(stringBody(CharsetUTF8))
@@ -166,3 +175,18 @@ private def endpointStaticallyGenerableFilePath[SECURITY_INPUT, INPUT, ERROR_OUT
     None
   else
     Some( Rooted.fromElements( inputs.collect{ case input : EndpointInput.FixedPath[_] => input.s } : _* ) )
+
+def walkOutput[T]( output : EndpointOutput[?], f : Function1[EndpointOutput[?],Function1[T,T]], accum : T ) : T =
+  val newAccum = f(output)(accum)
+  output match
+    case p : Pair[?,?,?] =>
+      val afterLeft = walkOutput( p.left, f, newAccum )
+      walkOutput( p.right, f, afterLeft )
+    case mp : MappedPair[_,_,_,_] =>
+      walkOutput( mp.output, f, newAccum )
+    case _ => newAccum
+
+def outputsAsVector( output : EndpointOutput[?] ) : Vector[EndpointOutput[?]] =
+  val f = (eo : EndpointOutput[?]) => (v : Vector[EndpointOutput[?]] ) => v :+ eo
+  walkOutput(output, f, Vector.empty[EndpointOutput[?]])
+

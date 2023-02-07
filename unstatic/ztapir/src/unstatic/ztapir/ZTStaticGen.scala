@@ -95,7 +95,7 @@ private object ZTStaticGen:
         case ( Some( stringTask ), _ ) =>
           for
             contents <- stringTask
-            _ <- writeStringFor(generable.siteRootedPath, contents)
+            _ <- writeStringFor(generable.siteRootedPath, contents, generable.mbCharset.getOrElse(CharsetUTF8))
           yield ()
         case (None, Some(bytesTask)) =>
           for
