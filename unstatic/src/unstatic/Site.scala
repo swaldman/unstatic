@@ -45,5 +45,6 @@ trait Site extends StaticLocationBinding.Source:
     lazy val serverRootedPath          : Rooted       = site.serverRootedPath(siteRootedPath)
     lazy val absolutePath              : Abs          = absFromServerRooted( this.serverRootedPath )
     lazy val parent                    : SiteLocation = this.copy(siteRootedPath=siteRootedPath.parent)
+    override def toString()            : String       = this.serverRootedPath.toString()
 
   lazy val siteRootLocation = SiteLocation( Rooted.root )
