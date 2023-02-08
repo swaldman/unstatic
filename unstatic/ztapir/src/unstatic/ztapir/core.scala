@@ -55,6 +55,7 @@ private def errMapped[S,T]( f : Function1[S,Task[T]] ) : Function1[S,zio.ZIO[Any
   // XXX: Should I do something to break harder on non-nonFatal errors?
   f.andThen( errMapped )
 
+/*
 private val DirIndexRedirectStart = "DIRECTORY INDEX REDIRECT"
 private def directoryRedirectBody( fromServerRooted : Rooted ) : String =
     s"${DirIndexRedirectStart}: ${fromServerRooted.asLeaf} -> ${fromServerRooted.asDir}"
@@ -88,6 +89,7 @@ private def redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRooted : 
   val logic : String => Task[String] = (s : String) => ZIO.attempt(s)
   val ztServerEndpoint = endpoint.zServerLogic(errMapped[String,String](logic)).glitchWiden
   ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), SomeUTF8, false) // the HTML is marked UTF8
+*/
 
 private def redirectEndpoint( fromServerRooted : Rooted, toServerRooted : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =
   endpointForFixedPath(fromServerRooted)
@@ -99,12 +101,14 @@ private val UnitTask = ZIO.attempt( () )
 private val CharsetUTF8 = scala.io.Codec.UTF8.charSet
 private val SomeUTF8    = Some(CharsetUTF8)
 
+val UnitUnitLogic = (_ : Unit) => (ZIO.unit : Task[Unit])
+
 private def redirectZTEndpointBinding( fromServerRooted : Rooted, toServerRooted : Rooted, site : Site ) : ZTEndpointBinding =
   val endpoint = redirectEndpoint(fromServerRooted,toServerRooted)
-  val logic : Unit => ZIO[Any,Throwable,Unit] =  _ => UnitTask
-  val ztServerEndpoint = endpoint.zServerLogic( logic.andThen(_.mapError(_ => ()) ) ).glitchWiden
-  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), None, false)
+  val ztServerEndpoint = endpoint.zServerLogic( UnitUnitLogic.andThen(_.mapError(_ => ()) ) ).glitchWiden
+  ZTEndpointBinding.Generic[Unit,Unit](site.siteRootedPath(fromServerRooted), ztServerEndpoint, UnitUnitLogic)
 
+/*
 private def staticallyGenerableZTEndpointBindingWithNewSiteRootedPath( newSiteRootedPath : Rooted, site : Site, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
   val newServerRootedPath = site.serverRootedPath(newSiteRootedPath)
   staticallyGenerableZTEndpointBindingWithNewPath( newSiteRootedPath, newServerRootedPath, generableBinding )
@@ -125,6 +129,7 @@ private def staticallyGenerableZTEndpointBindingWithNewPath( newSiteRootedPath :
       // since we're using both the output and type of generableBinding, we know they should be consistent
       newEndpoint.zServerLogic( _ => errMapped(newLogicTask.asInstanceOf[zio.Task[generableBinding.ztServerEndpoint.OUTPUT]]))
     generableBinding.copy(siteRootedPath=newSiteRootedPath, ztServerEndpoint=newZTServerEndpoint.asInstanceOf[ZTServerEndpoint])
+*/
 
 private def publicReadOnlyUtf8HtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =
@@ -150,11 +155,13 @@ private def staticDirectoryServingEndpoint(siteRootedPath: Rooted, site: Site, d
 /**
  *  This path is server rooted, not site rooted!
  */
+/*
 private def endpointStaticallyGenerableFilePath( endpointBinding : ZTEndpointBinding ) : Option[Rooted] =
   if endpointBinding.isGenerable then
     endpointStaticallyGenerableFilePath(endpointBinding.ztServerEndpoint.endpoint)
   else
     None
+*/
 
 // we wouldn't know how to generate from this, though. service is opaque, buried in the ServerInterpreter
 // private def endpointStaticallyGenerableFilePath[R,F[_]]( serverEndpoint : ServerEndpoint[R,F] ) : Option[Rooted] =

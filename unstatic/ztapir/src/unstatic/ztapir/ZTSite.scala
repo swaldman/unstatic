@@ -59,13 +59,14 @@ object ZTSite:
 
       // we need to find the directories associated with directory indexes, and create bindings for those
       val directoryIndexDirectoryBindingByIndexBinding =
-        endpointBindings.map( binding => endpointStaticallyGenerableFilePath( binding ) ).zip(endpointBindings)
-          .collect { case (Some( path ), binding ) => (path, binding) }
+        endpointBindings
+          .collect { case g : ZTEndpointBinding.Generable => g }
+          .map( g => Tuple2(g.siteRootedPath, g ) )
           .filter { case (path, _) =>
             val elements = path.elements
             elements.nonEmpty && cfg.directoryIndexes(elements.last)
           }
-          .map { case (dirIndexPath, fullIndexBinding) =>
+          .map { case (siteRooteddirIndexPath, fullIndexBinding) =>
 /*
             val dirBinding =
               val newServerRootedPath = dirIndexPath.parent // parent will represent the directory
@@ -83,6 +84,7 @@ object ZTSite:
             ( fullIndexBinding, redirectBinding )
 */
             val redirectBinding =
+              val dirIndexPath = site.serverRootedPath(siteRooteddirIndexPath)
               val fromServerRootedPath = dirIndexPath.parent
               val toServerRootedPath = dirIndexPath
               redirectZTEndpointBinding( fromServerRootedPath, toServerRootedPath, site )
@@ -94,9 +96,12 @@ object ZTSite:
       // the intended priority of resolution
       val enrichedEndpointBindings =
         endpointBindings.map { origBinding =>
-          directoryIndexDirectoryBindingByIndexBinding.get(origBinding) match
-            case None                    => Seq( origBinding )
-            case Some( redirectBinding ) => Seq( origBinding, redirectBinding )
+          origBinding match
+            case gen : ZTEndpointBinding.Generable =>
+              directoryIndexDirectoryBindingByIndexBinding.get(gen) match
+                case Some( redirectBinding ) => Seq( gen, redirectBinding )
+                case None                    => Seq( gen )
+            case _ => Seq( origBinding )
         }
         .flatten
 
@@ -234,7 +239,7 @@ object ZTSite:
         case result : ZTStaticGen.Result => reportResult(result)
         case _                           => ZIO.unit
 
-    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }.exitCode
+    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }.debug.exitCode
 
     val runTask =
       for

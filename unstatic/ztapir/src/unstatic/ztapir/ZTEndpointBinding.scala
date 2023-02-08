@@ -22,25 +22,39 @@ object ZTEndpointBinding:
     def endpointBindings : immutable.Seq[ZTEndpointBinding]
 
   def staticDirectoryServing( siteRootedPath: Rooted, site: ZTSite, dir : JPath ) : ZTEndpointBinding =
-    ZTEndpointBinding(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), None, None, true)
+    FromStaticDirectory(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), dir)
 
   def staticDirectoryServing(siteLocation: ZTSite#SiteLocation, dir: JPath): ZTEndpointBinding =
     staticDirectoryServing(siteLocation.siteRootedPath, siteLocation.site, dir)
 
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String] ) : ZTEndpointBinding =
-    ZTEndpointBinding( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), Some(ZTLogic.UnitString( task )), SomeUTF8, false )
+    StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, CharsetUTF8 )
 
   def publicReadOnlyHtml(siteLocation: ZTSite#SiteLocation, task: zio.Task[String]): ZTEndpointBinding =
     publicReadOnlyHtml(siteLocation.siteRootedPath, siteLocation.site, task)
 
   def publicReadOnlyRss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String] ) : ZTEndpointBinding =
-    ZTEndpointBinding( siteRootedPath, publicReadOnlyUtf8RssEndpoint( siteRootedPath, site, task ), Some(ZTLogic.UnitString( task )), SomeUTF8, false )
+    StringGenerable( siteRootedPath, publicReadOnlyUtf8RssEndpoint( siteRootedPath, site, task ), task, CharsetUTF8 )
 
   def publicReadOnlyRss(siteLocation: ZTSite#SiteLocation, task: zio.Task[String]): ZTEndpointBinding =
     publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task)
 
-case class ZTEndpointBinding( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, mbLogic : Option[ZTLogic[_,_]], mbCharset : Option[Charset], fromStaticLocation : Boolean ):
+  trait Generable extends ZTEndpointBinding:
+    val bytesGenerator : Task[immutable.Seq[Byte]]
 
+  case class StringGenerable(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[String], charset : Charset) extends Generable:
+    val bytesGenerator = generator.map( s => immutable.ArraySeq.unsafeWrapArray(s.getBytes(charset)) )
+  case class BytesGenerable( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[immutable.Seq[Byte]] ) extends Generable:
+    val bytesGenerator = generator
+  case class FromStaticDirectory(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, dir : JPath) extends ZTEndpointBinding
+  case class Generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O]) extends ZTEndpointBinding
+
+sealed trait ZTEndpointBinding:
+  val siteRootedPath : Rooted
+  val ztServerEndpoint : ZTServerEndpoint
+
+//, mbLogic : Option[ZTLogic[_,_]], mbCharset : Option[Charset], fromStaticLocation : Boolean ):
+/*
   /**
    * Be sure to use this if you want control of the charset, otherwise you'll be stuck with UTF8 bytes
    */
@@ -62,3 +76,4 @@ case class ZTEndpointBinding( siteRootedPath : Rooted, ztServerEndpoint : ZTServ
   def isStringGenerable : Boolean = mbStringGenerator.nonEmpty
   def isBytesGenerable  : Boolean = mbBytesGenerator.nonEmpty
   def isGenerable       : Boolean = isBytesGenerable
+*/

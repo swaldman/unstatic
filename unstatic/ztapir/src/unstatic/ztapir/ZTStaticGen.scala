@@ -40,18 +40,29 @@ private object ZTStaticGen:
       = endpointBindings.partition( epb => ignorePrefixes.exists(pfx => pfx.isPrefixOf(epb.siteRootedPath)) )
 
     // we don't ignore any static location bindings
-    val unignoredLocationBindings= staticLocationBindings
+    val unignoredLocationBindings = staticLocationBindings
 
-    val (ungenerableEndpointBindings, generableEndpointBindings)
-      = unignoredEndpointBindings.partition( ep => !ep.isGenerable )
+
+    val (ungenerableEndpointBindings, generableEndpointBindings) =
+      unignoredEndpointBindings.foldLeft( Tuple2(Vector.empty[ZTEndpointBinding], Vector.empty[ZTEndpointBinding.Generable]) ){ (accum, next) =>
+        next match
+          case gen : ZTEndpointBinding.Generable => ( accum(0), accum(1) :+ gen )
+          case not                               => ( accum(0) :+ not, accum(1) )
+      }
 
     // println(s"unignoredLocationBindings: " + unignoredLocationBindings.mkString(", "))
 
     val noExceptionResult =
       val generated = generableEndpointBindings.map( _.siteRootedPath )
       val copied = unignoredLocationBindings
+      val copiedSiteRootedPaths = unignoredLocationBindings.map(_.siteRootedPath).toSet
       val ignoredForGeneration = ignoredEndpointBindings.map( _.siteRootedPath )
-      val ungenerable = ungenerableEndpointBindings.filterNot(_.fromStaticLocation).map( _.siteRootedPath )
+      val ungenerable =
+        def generatedFromLocation( zteb : ZTEndpointBinding ) =
+          zteb match
+            case fsd : ZTEndpointBinding.FromStaticDirectory if copiedSiteRootedPaths(fsd.siteRootedPath) => true
+            case _ => false
+        ungenerableEndpointBindings.filterNot(generatedFromLocation).map( _.siteRootedPath )
       Result( generated, copied, ignoredForGeneration, ungenerable )
 
     def findDestPathFor(siteRootedPath: Rooted) = ZIO.attempt {
@@ -76,7 +87,7 @@ private object ZTStaticGen:
         _          <- ZIO.attempt( Files.writeString(destPath, contents, codec.charSet) )
       yield()
 
-    def writeBytesFor( siteRootedPath : Rooted, contents : immutable.ArraySeq[Byte] ) : Task[Unit] =
+    def writeBytesFor( siteRootedPath : Rooted, contents : immutable.Seq[Byte] ) : Task[Unit] =
       for
         destParent <- findDestPathFor(siteRootedPath.parent) // will throw if root
         destPath   <- findDestPathFor(siteRootedPath)//.debug("dest path")
@@ -84,28 +95,16 @@ private object ZTStaticGen:
         _          <- ZIO.attempt( Files.write(destPath, contents.toArray) )
       yield()
 
-
     // note that we reverse, so that if there are conficts, early location bindings will overwrite late ones
     val locationTasks = unignoredLocationBindings.reverse.map( slb => generateLocation(slb.siteRootedPath, slb.source) )
 
     // println(s"locationTasks: " + locationTasks.mkString(", "))
 
-    val endpointTasks = generableEndpointBindings.map { case generable: ZTEndpointBinding =>
-      ( generable.mbStringGenerator, generable.mbBytesGenerator ) match
-        case ( Some( stringTask ), _ ) =>
+    val endpointTasks = generableEndpointBindings.map { generable =>
           for
-            contents <- stringTask
-            _ <- writeStringFor(generable.siteRootedPath, contents, generable.mbCharset.getOrElse(CharsetUTF8))
-          yield ()
-        case (None, Some(bytesTask)) =>
-          for
-            contents <- bytesTask
+            contents <- generable.bytesGenerator
             _ <- writeBytesFor(generable.siteRootedPath, contents)
           yield ()
-        case (None, None) =>
-          throw new AssertionError {
-            "An endpoint we have previously verified is generable offers no task to generate as String or bytes: " + generable
-          }
     }
     ZIO.foreachDiscard(locationTasks ++ endpointTasks)(identity).map( _ => noExceptionResult )
 
