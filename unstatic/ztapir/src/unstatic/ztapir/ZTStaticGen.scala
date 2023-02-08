@@ -7,7 +7,7 @@ import unstatic.*
 import unstatic.UrlPath.*
 
 private object ZTStaticGen:
-  case class Result( generated : immutable.Seq[Rooted], ignored : immutable.Seq[Rooted], ungenerable : immutable.Seq[Rooted])
+  case class Result( generated : immutable.Seq[Rooted], copied : immutable.Seq[StaticLocationBinding], ignored : immutable.Seq[Rooted], ungenerable : immutable.Seq[Rooted])
 
   private def overwriteCopyRegularFile( source : JPath, dest : JPath ) = ZIO.attempt {
     // println(s"overwriteCopyRegularFile( ${source}, ${dest} )")
@@ -39,8 +39,8 @@ private object ZTStaticGen:
     val (ignoredEndpointBindings, unignoredEndpointBindings)
       = endpointBindings.partition( epb => ignorePrefixes.exists(pfx => pfx.isPrefixOf(epb.siteRootedPath)) )
 
-    val (ignoredLocationBindings, unignoredLocationBindings)
-      = staticLocationBindings.partition( slb => ignorePrefixes.exists(pfx => pfx.isPrefixOf(slb.siteRootedPath) ) )
+    // we don't ignore any static location bindings
+    val unignoredLocationBindings= staticLocationBindings
 
     val (ungenerableEndpointBindings, generableEndpointBindings)
       = unignoredEndpointBindings.partition( ep => !ep.isGenerable )
@@ -48,11 +48,11 @@ private object ZTStaticGen:
     // println(s"unignoredLocationBindings: " + unignoredLocationBindings.mkString(", "))
 
     val noExceptionResult =
-      val generated = generableEndpointBindings.map( _.siteRootedPath ) ++ unignoredLocationBindings.map( _.siteRootedPath )
-      val ignored = ignoredEndpointBindings.map( _.siteRootedPath ) ++ ignoredLocationBindings.map( _.siteRootedPath )
-      val unignoredLocationSiteRootedPaths = unignoredLocationBindings.map( _.siteRootedPath ).toSet
-      val ungenerable = ungenerableEndpointBindings.map( _.siteRootedPath ).filter( siteRootedPath => !unignoredLocationSiteRootedPaths.contains(siteRootedPath) )
-      Result( generated, ignored, ungenerable )
+      val generated = generableEndpointBindings.map( _.siteRootedPath )
+      val copied = unignoredLocationBindings
+      val ignoredForGeneration = ignoredEndpointBindings.map( _.siteRootedPath )
+      val ungenerable = ungenerableEndpointBindings.filterNot(_.fromStaticLocation).map( _.siteRootedPath )
+      Result( generated, copied, ignoredForGeneration, ungenerable )
 
     def findDestPathFor(siteRootedPath: Rooted) = ZIO.attempt {
       if siteRootedPath == Rooted.root then

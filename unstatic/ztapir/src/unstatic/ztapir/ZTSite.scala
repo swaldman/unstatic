@@ -200,16 +200,49 @@ object ZTSite:
             _            <- serveTask
           yield staticResult
 
-    override def run = runTask(LogLevel.Info).catchSome{ case _ : BadCommandLine => ZIO.unit }
-
-    def runTask( level : LogLevel ) =
-      ZIO.logLevel(level) {
+    def printEndpointsWithHeader(header : String, endpoints : immutable.Seq[Rooted]) : Task[Unit] =
+      if endpoints.isEmpty then
+        ZIO.unit
+      else
         for
-          args <- getArgs
-          cfg <- ZIO.attempt(config(args.toArray))
-          _ <- work(cfg).debug.exitCode
+          _ <- Console.printLine(header)
+          _ <- ZIO.foreach(endpoints.map(_.toString).to(immutable.SortedSet))( endpoint => Console.printLine(s" \u27A3 ${endpoint}"))
         yield ()
-      }
+
+    def printCopiedWithHeader(header : String, staticEndpoints : immutable.Seq[StaticLocationBinding]) : Task[Unit] =
+      val sortedEndpoints = staticEndpoints.sortBy( _.siteRootedPath.toString )
+      if staticEndpoints.isEmpty then
+        ZIO.unit
+      else
+        for
+          _ <- Console.printLine(header)
+          _ <- ZIO.foreach(sortedEndpoints)( endpoint => Console.printLine(s" \u27A3 ${endpoint.siteRootedPath} <- ${endpoint.source}"))
+        yield ()
+
+
+    def reportResult( result : ZTStaticGen.Result ) : Task[Unit] =
+      val ZTStaticGen.Result( generated, copied, ignored, ungenerable ) = result
+      for
+        _ <- printEndpointsWithHeader("Endpoints generated:", generated)
+        _ <- printCopiedWithHeader("Endpoints copied from static locations:", copied)
+        _ <- printEndpointsWithHeader("Endpoints ignored by request:", ignored)
+        _ <- printEndpointsWithHeader("Endpoints with ungenerable definitions skipped:", ungenerable)
+      yield ()
+
+    def reportMaybeResult( mbr : ZTStaticGen.Result | Unit ) : Task[Unit] =
+      mbr match
+        case result : ZTStaticGen.Result => reportResult(result)
+        case _                           => ZIO.unit
+
+    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }.exitCode
+
+    val runTask =
+      for
+        args <- getArgs
+        cfg <- ZIO.attempt(config(args.toArray))
+        mbr <- work(cfg)
+        _   <- reportMaybeResult(mbr)
+      yield ()
   end Main
 
   trait Composite extends ZTSite with Site.Composite:

@@ -87,7 +87,7 @@ private def redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRooted : 
   )
   val logic : String => Task[String] = (s : String) => ZIO.attempt(s)
   val ztServerEndpoint = endpoint.zServerLogic(errMapped[String,String](logic)).glitchWiden
-  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), SomeUTF8) // the HTML is marked UTF8
+  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), SomeUTF8, false) // the HTML is marked UTF8
 
 private def redirectEndpoint( fromServerRooted : Rooted, toServerRooted : Rooted ) : Endpoint[Unit, Unit, Unit, Unit, Any] =
   endpointForFixedPath(fromServerRooted)
@@ -103,7 +103,7 @@ private def redirectZTEndpointBinding( fromServerRooted : Rooted, toServerRooted
   val endpoint = redirectEndpoint(fromServerRooted,toServerRooted)
   val logic : Unit => ZIO[Any,Throwable,Unit] =  _ => UnitTask
   val ztServerEndpoint = endpoint.zServerLogic( logic.andThen(_.mapError(_ => ()) ) ).glitchWiden
-  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), None)
+  ZTEndpointBinding(site.siteRootedPath(fromServerRooted), ztServerEndpoint, Some(ZTLogic.Generic(logic)), None, false)
 
 private def staticallyGenerableZTEndpointBindingWithNewSiteRootedPath( newSiteRootedPath : Rooted, site : Site, generableBinding : ZTEndpointBinding ) : ZTEndpointBinding =
   val newServerRootedPath = site.serverRootedPath(newSiteRootedPath)
