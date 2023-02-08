@@ -16,12 +16,15 @@ import java.nio.file.Path as JPath
 object ZTSite:
   object Config:
     object Dynamic:
+      enum IndexStyle:
+        case RedirectToIndex, RedirectToSlash
       val DefaultPort = 8999
       val DefaultVerbose = false
       val DefaultDirectoryIndexes = immutable.Set("index.html","index.htm","index.rss","index.xml")
-      val Default = Dynamic(DefaultPort, DefaultVerbose, DefaultDirectoryIndexes)
+      val DefaultIndexStyle = IndexStyle.RedirectToIndex
+      val Default = Dynamic(DefaultPort, DefaultVerbose, DefaultDirectoryIndexes, DefaultIndexStyle)
       given Config.Dynamic = Default
-    case class Dynamic( port: Int, verbose: Boolean, directoryIndexes : immutable.Set[String] )
+    case class Dynamic( port: Int, verbose: Boolean, directoryIndexes : immutable.Set[String], indexStyle : Dynamic.IndexStyle )
     object Static:
       val Default = Config.Static( JPath.of("public"), Nil )
       given Config.Static = Default
@@ -66,29 +69,50 @@ object ZTSite:
             val elements = path.elements
             elements.nonEmpty && cfg.directoryIndexes(elements.last)
           }
-          .map { case (siteRooteddirIndexPath, fullIndexBinding) =>
-/*
-            val dirBinding =
-              val newServerRootedPath = dirIndexPath.parent // parent will represent the directory
-              staticallyGenerableZTEndpointBindingWithNewServerRootedPath(newServerRootedPath,site,fullIndexBinding)
-            val redirectBinding =
-              val fromServerRootedPath = dirIndexPath.parent.asNotDir // here we want to set handling for parent as file, no empty string to get us into the directory
-              val toServerRootedPath = dirIndexPath.parent // we want to go to parent as directory index
-              redirectZTEndpointBinding(fromServerRootedPath, toServerRootedPath, site)
-            ( fullIndexBinding, Tuple2(redirectBinding, dirBinding) )
-*/
-/*
-            val redirectBinding =
-              val fromServerRootedPath = dirIndexPath.parent.asNotDir
-              redirectOrServerDirectoryIndexZTEndpointBinding( fromServerRootedPath, site )
-            ( fullIndexBinding, redirectBinding )
-*/
-            val redirectBinding =
-              val dirIndexPath = site.serverRootedPath(siteRooteddirIndexPath)
-              val fromServerRootedPath = dirIndexPath.parent
-              val toServerRootedPath = dirIndexPath
-              redirectZTEndpointBinding( fromServerRootedPath, toServerRootedPath, site )
-            ( fullIndexBinding, redirectBinding )
+          .map { case (siteRootedDirIndexPath, fullIndexBinding) =>
+            val serverRootedDirIndexPath = site.serverRootedPath(siteRootedDirIndexPath)
+
+            val redirectBindings =
+              cfg.indexStyle match
+                case Config.Dynamic.IndexStyle.RedirectToIndex =>
+                  Seq( redirectZTEndpointBinding( serverRootedDirIndexPath.parent, serverRootedDirIndexPath, site ) )
+                case Config.Dynamic.IndexStyle.RedirectToSlash =>
+                  val serverRootedDirIndexPathParent = serverRootedDirIndexPath.parent
+                  val redirectEndpointBinding =
+                    val asLeaf = serverRootedDirIndexPathParent.asLeaf
+                    val ztServerEndpoint =
+                      endpointForFixedPath( asLeaf )
+                        .in( noTrailingSlash )
+                        .out( redirectOutputs(serverRootedDirIndexPathParent) )
+                        .zServerLogic( UnitUnitUnitLogic )
+                        .glitchWiden
+                    ZTEndpointBinding.Generic( site.siteRootedPath(asLeaf), ztServerEndpoint, UnitThrowableUnitLogic )
+                  val slashEndpointBinding =
+                    val basicEndpoint =
+                      endpointForFixedPath(serverRootedDirIndexPathParent)
+                        .errorOut(stringBody(CharsetUTF8))
+                        .out(header(sttp.model.Header.contentType(fullIndexBinding.contentType)))
+                    fullIndexBinding match
+                      case sg : ZTEndpointBinding.StringGenerable =>
+                        val coreLogic = (_:Unit) => sg.generator
+                        val ztse =
+                          val ct = fullIndexBinding.contentType
+                          val htmlUtf8 = ct.mainType == "text" && ct.subType == "html" && sg.charset == CharsetUTF8
+                          basicEndpoint
+                            .out(if htmlUtf8 then htmlBodyUtf8 else stringBody(sg.charset))
+                            .zServerLogic( errMapped(coreLogic) )
+                            .glitchWiden
+                        ZTEndpointBinding.Generic(site.siteRootedPath(serverRootedDirIndexPathParent), ztse, coreLogic)
+                      case otherGenerable =>
+                        val coreLogic = (_:Unit) => otherGenerable.bytesGenerator
+                        val ztse =
+                          basicEndpoint
+                            .out( byteArrayBody )
+                            .zServerLogic(errMapped(coreLogic.andThen( _.map(_.toArray) )))
+                            .glitchWiden
+                        ZTEndpointBinding.Generic(site.siteRootedPath(serverRootedDirIndexPathParent), ztse, coreLogic)
+                  Seq( redirectEndpointBinding, slashEndpointBinding )
+            ( fullIndexBinding, redirectBindings )
           }
           .toMap
 
@@ -99,8 +123,8 @@ object ZTSite:
           origBinding match
             case gen : ZTEndpointBinding.Generable =>
               directoryIndexDirectoryBindingByIndexBinding.get(gen) match
-                case Some( redirectBinding ) => Seq( gen, redirectBinding )
-                case None                    => Seq( gen )
+                case Some( redirectBindings ) => redirectBindings :+ gen
+                case None                     => Seq( gen )
             case _ => Seq( origBinding )
         }
         .flatten
@@ -163,6 +187,21 @@ object ZTSite:
                  .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(directoryIndexes = x.toSet) ) )
                  .text("names that can represent content of parent dir path")
                  .valueName("index.html,index.htm,..."),
+               opt[String]("index-redirect-to")
+                 .validate { x =>
+                    if (x == "slash" || x == "index") then success
+                    else failure("--index-redirect-to [slash|index] only" )
+                 }
+                 .action { (x, cfg) =>
+                   val style =
+                     if x == "slash" then
+                       Config.Dynamic.IndexStyle.RedirectToSlash
+                     else
+                       Config.Dynamic.IndexStyle.RedirectToIndex
+                   cfg.copy(cfgDynamic = cfg.cfgDynamic.copy(indexStyle = style))
+                 }
+                 .text("paths to directories with indexes should redirect to full index, or only to the directory trailing slash?")
+                 .valueName("[slash|index]"),
             ),
           cmd(Config.Command.hybrid.toString)
             .text("generate partial site and serve rest dynamically")
@@ -180,6 +219,21 @@ object ZTSite:
                  .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(directoryIndexes = x.toSet) ) )
                  .text("names that can represent content of parent dir path")
                  .valueName("index.html,index.htm,..."),
+               opt[String]("index-redirect-to")
+                 .validate { x =>
+                    if (x == "slash" || x == "index") then success
+                    else failure("--index-redirect-to [slash|index] only" )
+                 }
+                 .action { (x, cfg) =>
+                   val style =
+                     if x == "slash" then
+                       Config.Dynamic.IndexStyle.RedirectToSlash
+                     else
+                       Config.Dynamic.IndexStyle.RedirectToIndex
+                   cfg.copy(cfgDynamic = cfg.cfgDynamic.copy(indexStyle = style))
+                 }
+                 .text("paths to directories with indexes should redirect to full index, or only to the directory trailing slash?")
+                 .valueName("[slash|index]"),
                opt[Int]('p', "port")
                 .action( (x, cfg) => cfg.copy( cfgDynamic = cfg.cfgDynamic.copy(port = x) ) )
                 .valueName("<port-number>")
@@ -239,7 +293,7 @@ object ZTSite:
         case result : ZTStaticGen.Result => reportResult(result)
         case _                           => ZIO.unit
 
-    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }.debug.exitCode
+    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }.exitCode
 
     val runTask =
       for

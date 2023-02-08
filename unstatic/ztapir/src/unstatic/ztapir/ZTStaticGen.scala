@@ -87,7 +87,7 @@ private object ZTStaticGen:
         _          <- ZIO.attempt( Files.writeString(destPath, contents, codec.charSet) )
       yield()
 
-    def writeBytesFor( siteRootedPath : Rooted, contents : immutable.Seq[Byte] ) : Task[Unit] =
+    def writeBytesFor( siteRootedPath : Rooted, contents : immutable.ArraySeq[Byte] ) : Task[Unit] =
       for
         destParent <- findDestPathFor(siteRootedPath.parent) // will throw if root
         destPath   <- findDestPathFor(siteRootedPath)//.debug("dest path")

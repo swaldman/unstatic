@@ -122,8 +122,9 @@ trait SimpleBlog extends ZTBlog:
   // you can override this
   val fullContentFeed = true
 
-  lazy val feed : Element.Rss = makeFeed( fullContentFeed )
-  lazy val feedXml : String = feed.asXmlText(feedToXmlSpec)
+  lazy val feed      : Element.Rss              = makeFeed( fullContentFeed )
+  lazy val feedXml   : String                   = feed.asXmlText(feedToXmlSpec)
+  lazy val feedBytes : immutable.ArraySeq[Byte] = immutable.ArraySeq.unsafeWrapArray( feedXml.getBytes(CharsetUTF8) )
 
   val HtmlifierForContentType = immutable.Map[String,Htmlifier] (
     "text/html" -> Htmlifier.identity,
@@ -229,5 +230,5 @@ trait SimpleBlog extends ZTBlog:
     renderRange( renderLocation, from, Instant.now)
 
   override def endpointBindings : immutable.Seq[ZTEndpointBinding] =
-    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feedXml ))
+    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feedBytes ))
 
