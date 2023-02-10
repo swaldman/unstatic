@@ -1,8 +1,10 @@
 # TODO
 
- - Directory indexes when serving 
-   - redirect to slash rather than to index. worth it?
-   - https://github.com/softwaremill/tapir/blob/fbe92fdcb60d361fbf99614d7e5f73ca6ed815ef/docs/swagger-ui/src/main/scala/sttp/tapir/swagger/SwaggerUI.scala#L67-L76
+ - Flag to auto-open a browser window to site root on
+   server startup.
+ - Main executable: Be sure to print failure information.
+   - Right now, we exit silently (albeit with a failure 
+     exit code) when stuff happens
  - Better exceptions, search XXX and TODO
  - Add warnings in ZTStaticGen for eg root paths, 
    generableTo links that seem dir like, etc?
