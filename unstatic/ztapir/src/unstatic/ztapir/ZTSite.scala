@@ -293,7 +293,11 @@ object ZTSite:
         case result : ZTStaticGen.Result => reportResult(result)
         case _                           => ZIO.unit
 
-    override def run = runTask.catchSome{ case _ : BadCommandLine => ZIO.unit }.exitCode
+    override def run =
+      runTask
+        .catchSome { case _ : BadCommandLine => ZIO.unit }
+        .tapError( t => ZIO.attempt( t.printStackTrace() ) )
+        .exitCode
 
     val runTask =
       for
