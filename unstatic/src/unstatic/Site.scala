@@ -48,3 +48,5 @@ trait Site extends StaticLocationBinding.Source:
     override def toString()            : String       = this.serverRootedPath.toString()
 
   lazy val siteRootLocation = SiteLocation( Rooted.root )
+
+  def allBindings : immutable.Seq[AnyBinding] = this.locationBindings

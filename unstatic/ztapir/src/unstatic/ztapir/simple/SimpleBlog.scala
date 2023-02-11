@@ -173,8 +173,10 @@ trait SimpleBlog extends ZTBlog:
 
   lazy val rssFeed : SiteLocation = SiteLocation(frontPage.siteRootedPath.resolveSibling("feed.rss") )
 
+  private val DefaultRssFeedIdentifiers = immutable.Set("blogRssFeed")
+
   // you can override this
-  val rssFeedIdentifiers = immutable.Set("rssFeed")
+  def rssFeedIdentifiers = DefaultRssFeedIdentifiers
 
   /**
    * Filter the index of your untemplates for the blog's entries
@@ -211,8 +213,6 @@ trait SimpleBlog extends ZTBlog:
 
   def layoutPage( input : Layout.Input.Page ) : String
 
-  // TODO: Consider memoizing, since we will do this at least twice at permalink location
-  //       (once for permalink, once for feed)
   def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : String =
     val contentType = resolved.entryInfo.contentType
     val htmlifier = htmlifierForContentType(contentType).getOrElse {
@@ -224,7 +224,14 @@ trait SimpleBlog extends ZTBlog:
     val htmlResult = htmlifier(result.text, htmlifierOptions)
     val info = resolved.entryInfo
     val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, info.mbTitle, info.authors, info.tags, info.pubDate, SiteLocation(info.permalinkPathSiteRooted,site), presentation )
-    layoutEntry( layoutEntryInput )
+    val hashSpecialsUnresolvedHtml = layoutEntry( layoutEntryInput )
+    if (resolveHashSpecials) then
+      val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(hashSpecialsUnresolvedHtml)
+      val sourceId = s"${renderLocation.siteRootedPath} - ${resolved.entryUntemplate.UntemplateFullyQualifiedName}"
+      site.mutateHtmlResolveHashSpecials( jsoupDoc, sourceId, renderLocation.siteRootedPath, Some(resolved.entryInfo.mediaPathSiteRooted), false )
+      jsoupDoc.body().html
+    else
+      hashSpecialsUnresolvedHtml
 
   def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String =
     val entry = renderSingleFragment(renderLocation, resolved, Entry.Presentation.Single)

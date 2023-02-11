@@ -52,7 +52,7 @@ object ZTEndpointBinding:
   case class Generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O], identifiers : immutable.Set[String]) extends ZTEndpointBinding
 
 // Keys (initial elements) are site-rooted, but endpoints are server rooted!
-sealed trait ZTEndpointBinding:
+sealed trait ZTEndpointBinding extends AnyBinding:
   val siteRootedPath : Rooted
   val ztServerEndpoint : ZTServerEndpoint
   val identifiers : immutable.Set[String]
