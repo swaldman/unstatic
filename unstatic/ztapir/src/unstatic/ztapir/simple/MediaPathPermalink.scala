@@ -14,7 +14,20 @@ import untemplate.Untemplate.AnyUntemplate
 object MediaPathPermalink:
   import Attribute.Key
 
-  type Generator = (AnyUntemplate) => MediaPathPermalink
+  type Source = (AnyUntemplate) => MediaPathPermalink
+
+  def overridable( source : Source, ut : AnyUntemplate ) : MediaPathPermalink =
+    overridable( source )( ut )
+
+  def overridable( source : Source ) : Source = { (ut : AnyUntemplate) =>
+    val overrideMediaDir  = Key.`MediaDir`.caseInsensitiveCheck(ut).map( Rooted.parseAndRoot )
+    val overridePermalink = Key.`Permalink`.caseInsensitiveCheck(ut).map( Rooted.parseAndRoot )
+    ( overrideMediaDir, overridePermalink ) match
+      case (Some(omd), Some(op)) => MediaPathPermalink(omd, op)
+      case (Some(omd), None    ) => MediaPathPermalink(omd, source(ut).permalinkSiteRooted)
+      case (None     , Some(op)) => MediaPathPermalink(source(ut).mediaPathSiteRooted, op)
+      case (None     , None    ) => source(ut)
+  }
 
   def fullyQualifiedNameDir( ut : AnyUntemplate ) : MediaPathPermalink =
     val dirSitePath = ut.UntemplateFullyQualifiedName.map( c => if c == '.' then '/' else c )
@@ -30,7 +43,7 @@ object MediaPathPermalink:
     ensureNoFilePathChars(linkName)
     yearMonthDayNameDir(pubDate, linkName)
 
-  def givenPermalinkInMediaDirOrElse( backstop : Generator ) : Generator = { ut =>
+  def givenPermalinkInMediaDirOrElse( backstop : Source ) : Source = { ut =>
     mbGivenPermalinkInMediaDir(ut).getOrElse( backstop(ut) )
   }
 

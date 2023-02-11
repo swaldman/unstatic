@@ -54,5 +54,6 @@ object Attribute:
     case `PubDate`      extends Key[Instant]     (Key.Converter.Timestamp,    "PublicationDate" :: Nil)
     case `Content-Type` extends Key[String]      (Key.Converter.SimpleString, "ContentType"     :: Nil)
     case `Permalink`    extends Key[String]      (Key.Converter.SimpleString,                      Nil)
+    case `MediaDir`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `LinkName`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
 
