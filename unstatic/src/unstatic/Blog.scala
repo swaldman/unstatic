@@ -1,7 +1,6 @@
 package unstatic
 
 import scala.collection.*
-import scala.annotation.tailrec
 
 object Blog:
   enum EntryPresentation:
@@ -43,17 +42,7 @@ trait Blog:
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : EntryPresentation ) : EntryInput
 
-  def entryIds( entryResolved : EntryResolved ) : List[String] =
-    val fqn = entryResolved.entryUntemplate.UntemplateFullyQualifiedName
-    val fqnList = fqn.split('.').toList
-
-    @tailrec
-    def suffixes(name : List[String], accum : List[List[String]]) : List[List[String]] =
-      name match
-        case head :: tail => suffixes(tail, accum :+ name)
-        case Nil => accum
-
-    suffixes(fqnList, Nil).map( _.mkString(".") )
+  def entryIds( entryResolved : EntryResolved ) : List[String] = fqnSuffixes(entryResolved.entryUntemplate)
 
   lazy val mapEntryById =
     val rawTuples = entriesResolved.toList.flatMap( resolved => entryIds(resolved).map( id => Tuple2(id, resolved) ) )
