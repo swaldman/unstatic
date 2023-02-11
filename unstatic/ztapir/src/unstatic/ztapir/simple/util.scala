@@ -12,10 +12,18 @@ import unstatic.UrlPath.*
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document as JsoupDocument
 
+import Attribute.Key
 
-def findContentType( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : String =
-  import Attribute.Key.*
-  (checkable.check(`Content-Type`) orElse contentTypeFromSuffix(ut.UntemplateName)).getOrElse("text/plain")
+def findContentType( ut : untemplate.Untemplate[?,?] ) : String =
+  (Key.`Content-Type`.caseInsensitiveCheck(ut) orElse contentTypeFromSuffix(ut.UntemplateName)).getOrElse("text/plain")
+
+def normalizeContentType( contentType : String ) =
+  val semi = contentType.indexOf(';')
+  if semi < 0 then
+    contentType
+  else
+    // XXX: Log something about ignoring params
+    contentType.substring(0,semi)
 
 def missingAttribute( ut : untemplate.Untemplate[?,?], key : Attribute.Key[?] ) : unstatic.MissingAttribute =
   new MissingAttribute(s"${ut} is missing required attribute '${key}'.")
@@ -29,6 +37,7 @@ def contentTypeFromSuffix( name : String ) : Option[String] =
     val suffix = name.substring(suffixDelimiter + 1)
     ContentTypeBySuffix.get(suffix)
   else
+    // XXX: we should log something in this case
     None
 
 private val ContentTypeBySuffix = immutable.Map (

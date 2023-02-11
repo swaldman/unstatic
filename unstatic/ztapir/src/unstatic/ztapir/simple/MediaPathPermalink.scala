@@ -9,35 +9,38 @@ import java.time.temporal.ChronoField
 import unstatic.*
 import unstatic.UrlPath.*
 
+import untemplate.Untemplate.AnyUntemplate
+
 object MediaPathPermalink:
-  import Attribute.Key.*
+  import Attribute.Key
 
-  type Generator = (Attribute.Checkable, untemplate.Untemplate[?,?]) => MediaPathPermalink
+  type Generator = (AnyUntemplate) => MediaPathPermalink
 
-  def fullyQualifiedNameDir( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink =
+  def fullyQualifiedNameDir( ut : AnyUntemplate ) : MediaPathPermalink =
     val dirSitePath = ut.UntemplateFullyQualifiedName.map( c => if c == '.' then '/' else c )
     val mediaPath = Rooted.parseAndRoot(dirSitePath)
     MediaPathPermalink( mediaPath, mediaPath.resolve("index.html") )
 
-  def yearMonthDayNameDir( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink =
-    val pubDate = checkable.check(`PubDate`).getOrElse {
-      throw missingAttribute(ut, `PubDate`)
+  def yearMonthDayNameDir( ut : AnyUntemplate ) : MediaPathPermalink =
+    val pubDate = Key.`PubDate`.caseInsensitiveCheck(ut).getOrElse {
+      throw missingAttribute(ut, Key.`PubDate`)
     }
-    val linkName = (checkable.check(`LinkName`) orElse checkable.check(`Title`).map(linkableTitle)).getOrElse(ut.UntemplateName)
+    val linkName =
+      (Key.`LinkName`.caseInsensitiveCheck(ut) orElse Key.`Title`.caseInsensitiveCheck(ut).map(linkableTitle)).getOrElse(ut.UntemplateName)
     ensureNoFilePathChars(linkName)
     yearMonthDayNameDir(pubDate, linkName)
 
-  def givenPermalinkInMediaDirOrElse( backstop : Generator ) : Generator = { (checkable, ut) =>
-    mbGivenPermalinkInMediaDir(checkable, ut).getOrElse( backstop(checkable, ut) )
+  def givenPermalinkInMediaDirOrElse( backstop : Generator ) : Generator = { ut =>
+    mbGivenPermalinkInMediaDir(ut).getOrElse( backstop(ut) )
   }
 
-  def givenPermalinkInMediaDir( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink =
-    mbGivenPermalinkInMediaDir( checkable, ut ).getOrElse {
-      throw missingAttribute(ut, `Permalink`)
+  def givenPermalinkInMediaDir( ut : AnyUntemplate ) : MediaPathPermalink =
+    mbGivenPermalinkInMediaDir( ut ).getOrElse {
+      throw missingAttribute(ut, Key.`Permalink`)
     }
 
-  def mbGivenPermalinkInMediaDir( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : Option[MediaPathPermalink] =
-    checkable.check(`Permalink`).map(givenPermalinkInMediaDir)
+  def mbGivenPermalinkInMediaDir( ut : AnyUntemplate ) : Option[MediaPathPermalink] =
+    Key.`Permalink`.caseInsensitiveCheck(ut).map(givenPermalinkInMediaDir)
 
   def givenMediaDirAndPermalink(mediaDirSiteRooted : String, permalinkSiteRooted: String): MediaPathPermalink =
     MediaPathPermalink(Rooted.parseAndRoot(mediaDirSiteRooted), Rooted.parseAndRoot(permalinkSiteRooted))

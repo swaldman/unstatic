@@ -7,7 +7,15 @@ import unstatic.UrlPath.*
 import unstatic.ztapir.*
 import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 
+object SimpleBlog:
+  object Htmlifier:
+    val identity : Htmlifier = (s : String, opts : Options) => s
+    val preText : Htmlifier = (s : String, opts : Options) => s"<pre>${s}</pre>"
+    val defaultMarkdown : Htmlifier = (s : String, opts : Options) => Flexmark.defaultMarkdownToHtml(s, opts.generatorFullyQualifiedName )
+    case class Options( generatorFullyQualifiedName : Option[String] )
+  type Htmlifier = Function2[String,Htmlifier.Options,String]
 trait SimpleBlog extends ZTBlog:
+  import SimpleBlog.Htmlifier
   object Entry:
     val Presentation  = Blog.EntryPresentation
     type Presentation = Blog.EntryPresentation
@@ -33,7 +41,7 @@ trait SimpleBlog extends ZTBlog:
   object Layout:
     object Input:
       case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, mbTitle : Option[String], authors : Seq[String], tags : Seq[String], pubDate : Instant, permalinkLocation : SiteLocation, presentation : SimpleBlog.this.Entry.Presentation )
-      case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String )
+      case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String, sourceEntries : immutable.Seq[EntryResolved] )
     end Input
   end Layout
 
@@ -126,10 +134,15 @@ trait SimpleBlog extends ZTBlog:
   lazy val feedXml   : String                   = feed.asXmlText(feedToXmlSpec)
   lazy val feedBytes : immutable.ArraySeq[Byte] = immutable.ArraySeq.unsafeWrapArray( feedXml.getBytes(CharsetUTF8) )
 
-  val HtmlifierForContentType = immutable.Map[String,Htmlifier] (
-    "text/html" -> Htmlifier.identity,
-    "text/markdown" -> Flexmark.markdownToHtml,
+  private val DefaultHtmlifierForContentType = immutable.Map[String,Htmlifier] (
+    "text/html"     -> Htmlifier.identity,
+    "text/markdown" -> Htmlifier.defaultMarkdown,
+    "text/plain"    -> Htmlifier.preText
   )
+
+  // you can override this
+  def htmlifierForContentType(contentType : String) : Option[Htmlifier] =
+    DefaultHtmlifierForContentType.get( contentType )
 
   type EntryInfo      = Entry.Info
   type EntryInput     = Entry.Input
@@ -165,19 +178,18 @@ trait SimpleBlog extends ZTBlog:
    */
   def entryUntemplates : immutable.Set[EntryUntemplate]
 
-  def mediaPathPermalink( checkable : Attribute.Checkable, ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink
+  def mediaPathPermalink( ut : untemplate.Untemplate[?,?] ) : MediaPathPermalink
 
   def entryInfo( template : EntryUntemplate ) : EntryInfo =
-    import Attribute.Key.*
+    import Attribute.Key
 
-    val checkable : Attribute.Checkable = Attribute.Checkable.from(template)
-    val mbTitle     = checkable.check(`Title`)
-    val authors     = checkable.check(`Author`).getOrElse(Nil)
-    val tags        = checkable.check(`Tag`).getOrElse(Nil)
-    val pubDate     = checkable.check(`PubDate`).getOrElse( throw missingAttribute( template, `PubDate`) )
-    val contentType = findContentType( checkable, template )
+    val mbTitle     = Key.`Title`.caseInsensitiveCheck(template)
+    val authors     = Key.`Author`.caseInsensitiveCheck(template).getOrElse(Nil)
+    val tags        = Key.`Tag`.caseInsensitiveCheck(template).getOrElse(Nil)
+    val pubDate     = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
+    val contentType = normalizeContentType( findContentType( template ) )
 
-    val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( checkable, template )
+    val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
     Entry.Info(mbTitle, authors, tags, pubDate, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
@@ -199,7 +211,10 @@ trait SimpleBlog extends ZTBlog:
   // TODO: Consider memoizing, since we will do this at least twice at permalink location
   //       (once for permalink, once for feed)
   def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : String =
-    val htmlifier = HtmlifierForContentType(resolved.entryInfo.contentType)
+    val contentType = resolved.entryInfo.contentType
+    val htmlifier = htmlifierForContentType(contentType).getOrElse {
+      throw new NoHtmlifierForContentType( s"Could not find a function to convert entries of Content-Type '${contentType}' into HTML.")
+    }
     val ei = entryInput( renderLocation, resolved, presentation )
     val result = resolved.entryUntemplate(ei)
     val htmlifierOptions = Htmlifier.Options(generatorFullyQualifiedName = Some(resolved.entryUntemplate.UntemplateFullyQualifiedName))
@@ -210,7 +225,7 @@ trait SimpleBlog extends ZTBlog:
 
   def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String =
     val entry = renderSingleFragment(renderLocation, resolved, Entry.Presentation.Single)
-    val layoutPageInput = Layout.Input.Page(this, site, renderLocation, entry)
+    val layoutPageInput = Layout.Input.Page(this, site, renderLocation, entry, immutable.Seq(resolved))
     layoutPage( layoutPageInput )
 
   def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String =
@@ -218,7 +233,7 @@ trait SimpleBlog extends ZTBlog:
     // resolveds.foreach( r => println(s"${r.entryUntemplate} -- ${r.entryInfo.pubDate}") )
     val fragmentTexts = resolveds.map(resolved => renderSingleFragment(renderLocation, resolved, Entry.Presentation.Multiple))
     val unifiedFragmentTexts = fragmentTexts.mkString(entrySeparator)
-    val layoutPageInput = Layout.Input.Page(this, site, renderLocation, unifiedFragmentTexts)
+    val layoutPageInput = Layout.Input.Page(this, site, renderLocation, unifiedFragmentTexts, resolveds)
     layoutPage( layoutPageInput )
 
   def renderRange(renderLocation: SiteLocation, from: Instant, until: Instant): String =

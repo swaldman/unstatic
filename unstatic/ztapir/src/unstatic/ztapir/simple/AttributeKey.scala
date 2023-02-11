@@ -1,5 +1,7 @@
 package unstatic.ztapir.simple
 
+import untemplate.*
+
 import java.time.Instant
 import scala.collection.*
 
@@ -28,7 +30,24 @@ object Attribute:
             case i : Instant => Some(i)
             case _           => None
     type Converter[T] = Any => Option[T]
-  enum Key[T](val converter : Key.Converter[T], val variations : List[String]):
+    abstract class Abstract[T](val converter : Key.Converter[T], val variations : List[String]):
+      lazy val allNames = (this.toString :: this.variations)
+      lazy val lcs = allNames.map(LowerCased.apply)
+      def caseInsensitiveCheck(ut : Untemplate.AnyUntemplate) : Option[T] =
+        val lcMap = ut.UntemplateAttributesLowerCased
+        def find( list : List[LowerCased] ) : Option[T] =
+          list match
+            case head :: tail => lcMap.get(head).flatMap(converter) orElse find(tail)
+            case Nil          => None
+        find(lcs)
+      def caseSensitiveCheck(ut : Untemplate.AnyUntemplate) : Option[T] =
+          val map = ut.UntemplateAttributes
+          def find( list : List[String] ) : Option[T] =
+            list match
+              case head :: tail => map.get(head).flatMap(converter) orElse find(tail)
+              case Nil          => None
+          find(allNames)
+  enum Key[T]( converter : Key.Converter[T], variations : List[String] ) extends Key.Abstract[T](converter, variations):
     case `Title`        extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `Author`       extends Key[List[String]](Key.Converter.StringList,   "Authors"         :: Nil)
     case `Tag`          extends Key[List[String]](Key.Converter.StringList,   "Tags"            :: Nil)
@@ -36,18 +55,4 @@ object Attribute:
     case `Content-Type` extends Key[String]      (Key.Converter.SimpleString, "ContentType"     :: Nil)
     case `Permalink`    extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `LinkName`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-  object Checkable:
-    def from( map : immutable.Map[String,Any] ) : Checkable =
-      new Checkable( map.map { case (k,v) => (lowerCased(k),v) } )
-    def from( ut : untemplate.Untemplate[?,?] ) : Checkable =
-      from( ut.UntemplateAttributes )
-  case class Checkable private ( private val lcMap : immutable.Map[LowerCased,Any] ):
-    def check[T](key : Key[T]) : Option[T] =
-      val lcs = (key.toString :: key.variations).map(lowerCased)
-      val convert : Key.Converter[T] = key.converter
-      def find( list : List[LowerCased] ) : Option[T] =
-        list match
-          case head :: tail => lcMap.get(head).flatMap(convert) orElse find(tail)
-          case Nil          => None
-      find(lcs)
 

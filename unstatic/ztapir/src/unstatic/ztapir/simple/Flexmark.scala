@@ -12,7 +12,7 @@ import com.vladsch.flexmark.ext.anchorlink.AnchorLinkExtension
 import java.util.Arrays
 
 object Flexmark:
-  def markdownToHtml( markdownText : String, options: Htmlifier.Options ) : String =
+  def defaultMarkdownToHtml( markdownText : String, mbGeneratorUniqueId: Option[String] ) : String =
     // we would like the id/name/hrefs to be guaranteed unique, so we'd like
     // to prepend fully-qualified-generator-names as unique IDs to those attributes in
     // footnote and headings.
@@ -54,6 +54,8 @@ object Flexmark:
     s"""|<div class="flexmark markdown">
         |${renderer.render(document)}
         |</div>""".stripMargin
+
+
 
 
 
