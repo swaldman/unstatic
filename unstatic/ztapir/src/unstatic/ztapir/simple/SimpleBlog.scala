@@ -173,6 +173,9 @@ trait SimpleBlog extends ZTBlog:
 
   lazy val rssFeed : SiteLocation = SiteLocation(frontPage.siteRootedPath.resolveSibling("feed.rss") )
 
+  // you can override this
+  val rssFeedIdentifiers = immutable.Set("rssFeed")
+
   /**
    * Filter the index of your untemplates for the blog's entries
    */
@@ -245,5 +248,5 @@ trait SimpleBlog extends ZTBlog:
     renderRange( renderLocation, from, Instant.now)
 
   override def endpointBindings : immutable.Seq[ZTEndpointBinding] =
-    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feedBytes ))
+    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feedBytes ), rssFeedIdentifiers )
 

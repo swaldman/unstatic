@@ -16,6 +16,8 @@ import java.nio.file.Path as JPath
 
 type ZTServerEndpoint = ZServerEndpoint[Any,Any] //ServerEndpoint[Any,[t] =>> ZIO[Any,String,t]]
 
+val NoIdentifiers = immutable.Set.empty[String]
+
 // valid operations returning ZServerEndpoint[Nothing,Any] seems to be a Scala 3/tapir
 // type inference glitch.
 //
@@ -72,7 +74,7 @@ val MediaTypeRss = MediaType("application","rss+xml",None,immutable.Map.empty[St
 private def redirectZTEndpointBinding( fromServerRooted : Rooted, toServerRooted : Rooted, site : Site ) : ZTEndpointBinding =
   val endpoint = redirectEndpoint(fromServerRooted,toServerRooted)
   val ztServerEndpoint = endpoint.zServerLogic( UnitUnitUnitLogic ).glitchWiden
-  ZTEndpointBinding.Generic[Unit,Unit](site.siteRootedPath(fromServerRooted), ztServerEndpoint, UnitThrowableUnitLogic)
+  ZTEndpointBinding.Generic[Unit,Unit](site.siteRootedPath(fromServerRooted), ztServerEndpoint, UnitThrowableUnitLogic, NoIdentifiers)
 
 private def publicReadOnlyUtf8HtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =

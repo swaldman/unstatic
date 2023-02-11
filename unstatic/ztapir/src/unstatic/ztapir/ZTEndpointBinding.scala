@@ -22,39 +22,40 @@ object ZTEndpointBinding:
   trait Source:
     def endpointBindings : immutable.Seq[ZTEndpointBinding]
 
-  def staticDirectoryServing( siteRootedPath: Rooted, site: ZTSite, dir : JPath ) : ZTEndpointBinding =
-    FromStaticDirectory(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), dir)
+  def staticDirectoryServing( siteRootedPath: Rooted, site: ZTSite, dir : JPath, identifiers : immutable.Set[String] ) : ZTEndpointBinding =
+    FromStaticDirectory(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), dir, identifiers)
 
-  def staticDirectoryServing(siteLocation: ZTSite#SiteLocation, dir: JPath): ZTEndpointBinding =
-    staticDirectoryServing(siteLocation.siteRootedPath, siteLocation.site, dir)
+  def staticDirectoryServing(siteLocation: ZTSite#SiteLocation, dir: JPath, identifiers : immutable.Set[String] ): ZTEndpointBinding =
+    staticDirectoryServing(siteLocation.siteRootedPath, siteLocation.site, dir, identifiers)
 
-  def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String] ) : ZTEndpointBinding =
-    StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8 )
+  def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], identifiers : immutable.Set[String]  ) : ZTEndpointBinding =
+    StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, identifiers )
 
-  def publicReadOnlyHtml(siteLocation: ZTSite#SiteLocation, task: zio.Task[String]): ZTEndpointBinding =
-    publicReadOnlyHtml(siteLocation.siteRootedPath, siteLocation.site, task)
+  def publicReadOnlyHtml(siteLocation: ZTSite#SiteLocation, task: zio.Task[String], identifiers : immutable.Set[String] ): ZTEndpointBinding =
+    publicReadOnlyHtml(siteLocation.siteRootedPath, siteLocation.site, task, identifiers)
 
-  def publicReadOnlyRss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTEndpointBinding =
-    BytesGenerable( siteRootedPath, publicReadOnlyUtf8RssEndpoint( siteRootedPath, site, task ), task, MediaTypeRss )
+  def publicReadOnlyRss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String]  ) : ZTEndpointBinding =
+    BytesGenerable( siteRootedPath, publicReadOnlyUtf8RssEndpoint( siteRootedPath, site, task ), task, MediaTypeRss, identifiers )
 
-  def publicReadOnlyRss(siteLocation: ZTSite#SiteLocation, task: zio.Task[immutable.ArraySeq[Byte]]): ZTEndpointBinding =
-    publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task)
+  def publicReadOnlyRss(siteLocation: ZTSite#SiteLocation, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String] ): ZTEndpointBinding =
+    publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task, identifiers)
 
   trait Generable extends ZTEndpointBinding:
     val contentType    : MediaType
     val bytesGenerator : Task[immutable.ArraySeq[Byte]]
 
-  case class StringGenerable(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[String], contentType : MediaType, charset : Charset) extends Generable:
+  case class StringGenerable(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[String], contentType : MediaType, charset : Charset, identifiers : immutable.Set[String]) extends Generable:
     val bytesGenerator = generator.map( s => immutable.ArraySeq.unsafeWrapArray(s.getBytes(charset)) )
-  case class BytesGenerable( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[immutable.ArraySeq[Byte]], contentType : MediaType ) extends Generable:
+  case class BytesGenerable( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[immutable.ArraySeq[Byte]], contentType : MediaType, identifiers : immutable.Set[String] ) extends Generable:
     val bytesGenerator = generator
-  case class FromStaticDirectory(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, dir : JPath) extends ZTEndpointBinding
-  case class Generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O]) extends ZTEndpointBinding
+  case class FromStaticDirectory(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, dir : JPath, identifiers : immutable.Set[String]) extends ZTEndpointBinding
+  case class Generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O], identifiers : immutable.Set[String]) extends ZTEndpointBinding
 
 // Keys (initial elements) are site-rooted, but endpoints are server rooted!
 sealed trait ZTEndpointBinding:
   val siteRootedPath : Rooted
   val ztServerEndpoint : ZTServerEndpoint
+  val identifiers : immutable.Set[String]
 
 //, mbLogic : Option[ZTLogic[_,_]], mbCharset : Option[Charset], fromStaticLocation : Boolean ):
 /*
