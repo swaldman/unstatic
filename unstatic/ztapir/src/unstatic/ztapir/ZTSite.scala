@@ -18,6 +18,9 @@ import org.jsoup.nodes.Element
 
 object ZTSite:
   object Config:
+    object List:
+      val Default = List( false, None )
+    case class List(allIdentifiers : Boolean, substringToMatch : Option[String])
     object Dynamic:
       enum IndexStyle:
         case RedirectToIndex, RedirectToSlash
@@ -33,9 +36,10 @@ object ZTSite:
       given Config.Static = Default
     case class Static( generateTo : JPath, noGenPrefixes : scala.Seq[Rooted] = Nil )
     enum Command:
-      case gen, serve, hybrid
+      case gen, serve, hybrid, list
   case class Config(
     command    : Config.Command = Config.Command.gen,
+    cfgList    : Config.List    = Config.List.Default,
     cfgStatic  : Config.Static  = Config.Static.Default,
     cfgDynamic : Config.Dynamic = Config.Dynamic.Default,
   )
@@ -154,6 +158,53 @@ object ZTSite:
   def generate( site : ZTSite )(using cfg : Config.Static) =
     ZTStaticGen.generateZTSite( site, cfg.generateTo, cfg.noGenPrefixes )
 
+  private def matchesSubstring( binding : AnyBinding, substr : String ) : Boolean =
+    val srpLc = binding.siteRootedPath.toString().toLowerCase
+    if srpLc.indexOf(substr) >= 0 then
+      true
+    else
+      binding.identifiers.view.map( _.toLowerCase ).exists(str => str.indexOf(substr) >= 0)
+
+  private def printIdentifierLine( id : String ) = Console.printLine("     \u27A3 " + id)
+  private def printIdentifiers( ids : immutable.Set[String], site : ZTSite, cfg : Config.List ) : Task[Unit] =
+    val byLenUids = ids.toVector.sortBy( s => (s.length, s) ).filter(id => !site.duplicateIdentifiers(id))
+    if cfg.allIdentifiers then
+      Console.printLine( "    identifiers (unique):" ) *> ZIO.foreachDiscard( byLenUids.map( printIdentifierLine ) )(identity)
+    else
+      byLenUids.headOption match
+        case Some(identifier) => Console.printLine(s"    uid: ${identifier}")
+        case None             => Console.printLine( "    uid: <no-unique-identifiers>" )
+
+  private def printInfoByType( binding : AnyBinding ) : Task[Unit] =
+    binding match
+      case slb : StaticLocationBinding =>
+        Console.printLine("  Copy-on-gen filesystem location.") *> Console.printLine(s"    source-dir: ${slb.source}")
+      case fsd : ZTEndpointBinding.FromStaticDirectory =>
+        Console.printLine("  Static HTTP service endpoint.") *> Console.printLine(s"    source-dir: ${fsd.dir}")
+      case sg : ZTEndpointBinding.StringGenerable =>
+        Console.printLine(s"  String endpoint of type '${sg.contentType}'.") *> Console.printLine("  Static generation and HTTP service.") *> sg.mediaDirSiteRooted.fold(ZIO.unit)(mdsr => Console.printLine(s"    media-dir: ${mdsr}"))
+      case bg : ZTEndpointBinding.BytesGenerable =>
+        Console.printLine(s"  Binary endpoint of type '${bg.contentType}'.") *> Console.printLine("  Static generation and HTTP service.")
+      case generic : ZTEndpointBinding.Generic[?,?] =>
+        Console.printLine("  Generic endpoint. No further information.")
+      case other =>
+        Console.printLine(s"  Unexpected endpoint type: ${other}")
+
+  def list( site : ZTSite )(using cfg : Config.List) : Task[Unit] =
+    val bindings =
+      cfg.substringToMatch match
+        case Some(substr) => site.allBindings.filter(binding => matchesSubstring(binding, substr))
+        case None         => site.allBindings
+    val bindingsPrinters =
+      bindings.map { binding =>
+        for
+          _ <- Console.printLine(s"Location: ${binding.siteRootedPath.toString()}")
+          _ <- printInfoByType(binding)
+          _ <- printIdentifiers( binding.identifiers, site, cfg )
+        yield ()
+    }
+    ZIO.foreachDiscard(bindingsPrinters)(identity)
+
   abstract class Main(site: ZTSite, executableName : String = "unstatic") extends ZIOAppDefault:
     def config( args : Array[String] ) : Config =
       import scopt.OParser
@@ -162,6 +213,18 @@ object ZTSite:
         import builder._
         OParser.sequence(
           programName(executableName),
+          cmd(Config.Command.list.toString)
+            .text("list and show information about endpoints")
+            .action((_, cfg) => cfg.copy(command = Config.Command.list))
+            .children(
+               opt[Unit]('a', "all-identfiers")
+                .action( (_, cfg) => cfg.copy( cfgList = cfg.cfgList.copy(allIdentifiers = true) ) )
+                .text("Display all unique identifiers for each endpoint."),
+               opt[String]('f', "filter-by-substring")
+                .action( (x, cfg) => cfg.copy( cfgList = cfg.cfgList.copy(substringToMatch = Some(x) ) ) )
+                .valueName("<substring>")
+                .text("Restrict output to endpoints with path or identifiers containing substring."),
+            ),
           cmd(Config.Command.gen.toString)
             .text("generate fully static site")
             .action((_, c) => c.copy(command = Config.Command.gen))
@@ -253,7 +316,9 @@ object ZTSite:
     def work( cfg : Config ) : Task[ZTStaticGen.Result] | Task[Unit] =
       val genTask   = generate(site)(using cfg.cfgStatic)
       val serveTask = serve(site)(using cfg.cfgDynamic)
+      val listTask  = list(site)(using cfg.cfgList)
       cfg.command match
+        case Config.Command.list   => listTask
         case Config.Command.gen    => genTask
         case Config.Command.serve  => serveTask
         case Config.Command.hybrid =>
@@ -322,13 +387,13 @@ trait ZTSite extends Site with ZTEndpointBinding.Source:
   lazy val siteRootedPathByIdentifier =
     allBindings.reverse.flatMap( b => b.identifiers.toSeq.map(id => (id, b.siteRootedPath)) ).toMap
 
-  def publicReadOnlyHtml(siteLocation: SiteLocation, task: zio.Task[String], identifiers : immutable.Set[String], resolveHashSpecials : Boolean, memoize : Boolean ) : ZTEndpointBinding =
+  def publicReadOnlyHtml(siteLocation: SiteLocation, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String], resolveHashSpecials : Boolean, memoize : Boolean ) : ZTEndpointBinding =
     def resolvingTask : zio.Task[String] =
       val sourceSiteRooted = siteLocation.siteRootedPath
       task.map( rawHtml => htmlResolveHashSpecials(sourceSiteRooted.toString(), siteLocation.siteRootedPath, rawHtml ) )
     val base        : zio.Task[String] = if resolveHashSpecials then resolvingTask else task
     val mbMemoizing : zio.Task[String] = if memoize then base.memoize.flatten else base
-    ZTEndpointBinding.publicReadOnlyHtml(siteLocation, mbMemoizing, identifiers )
+    ZTEndpointBinding.publicReadOnlyHtml(siteLocation, mbMemoizing, mediaDirSiteRooted, identifiers )
 
   private def htmlResolveHashSpecials( sourceId : String, sourceSiteRooted : Rooted, unresolvedHtml : String ) : String =
     val jsoupDoc = org.jsoup.Jsoup.parse(unresolvedHtml)
@@ -359,13 +424,13 @@ trait ZTSite extends Site with ZTEndpointBinding.Source:
             href
       else if href.startsWith("#/") then
         val destSiteRooted = Rooted(href.drop(1))
-        sourceSiteRooted.relativize(destSiteRooted).toString()
+        sourceSiteRooted.relativizeSibling(destSiteRooted).toString()
       else if href.startsWith("#./") then
         mbMediaDirSiteRooted match
           case Some( mediaDirSiteRooted ) =>
             val relpath = Rel(href.drop(3))
             val destSiteRooted = mediaDirSiteRooted.resolve(relpath)
-            sourceSiteRooted.relativize(destSiteRooted).toString()
+            sourceSiteRooted.relativizeSibling(destSiteRooted).toString()
           case None =>
             scribe.warn(s"${sourceId}: Special hash reference '${href}' is relative to a mediaDir, but no mediaDir is available in this context. Left as-is.")
             href

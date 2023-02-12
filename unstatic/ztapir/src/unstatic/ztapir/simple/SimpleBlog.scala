@@ -204,6 +204,8 @@ trait SimpleBlog extends ZTBlog:
 
   def permalink( resolved : EntryResolved ) : SiteLocation = SiteLocation( resolved.entryInfo.permalinkPathSiteRooted, site )
 
+  def mediaDir( resolved : EntryResolved ) : SiteLocation = SiteLocation( resolved.entryInfo.mediaPathSiteRooted, site )
+
   /**
    * Lays out only the entry, the fragment which will later become the main content of the page
    */

@@ -50,3 +50,6 @@ trait Site extends StaticLocationBinding.Source:
   lazy val siteRootLocation = SiteLocation( Rooted.root )
 
   def allBindings : immutable.Seq[AnyBinding] = this.locationBindings
+
+  lazy val duplicateIdentifiers : immutable.Set[String] =
+    allBindings.flatMap( _.identifiers ).groupBy(identity).filter(_(1).size > 1).map(_(0)).toSet

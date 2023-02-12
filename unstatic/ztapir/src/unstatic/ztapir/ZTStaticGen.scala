@@ -28,6 +28,9 @@ private object ZTStaticGen:
         Files.copy(srcPath, destPath, StandardCopyOption.REPLACE_EXISTING)
     }
   }
+  private def ensureExists( path : JPath ) = ZIO.attempt {
+    if !Files.exists(path) then Files.createDirectories(path) else ()
+  }
   private def checkIsDir(path : JPath) = ZIO.attempt( Files.isDirectory(path) )
 
   def generate(
@@ -75,6 +78,7 @@ private object ZTStaticGen:
     def generateLocation( siteRootedPath : Rooted, source : JPath ) : Task[Unit] =
       for
         destPath    <- findDestPathFor(siteRootedPath)//.debug("destPath")
+        _           <- ensureExists(source)
         sourceIsDir <- checkIsDir(source)
         _           <- if sourceIsDir then overwriteCopyDirectory( source, destPath ) else overwriteCopyRegularFile( source, destPath )
       yield ()
