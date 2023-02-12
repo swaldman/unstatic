@@ -7,4 +7,4 @@ import scala.collection.*
 object StaticLocationBinding:
   trait Source:
     def locationBindings : immutable.Seq[StaticLocationBinding]
-case class StaticLocationBinding( siteRootedPath : Rooted, source : JPath, identifiers : immutable.Set[String] ) extends AnyBinding
+case class StaticLocationBinding( siteRootedPath : Rooted, source : JPath, identifiers : immutable.Set[String] = immutable.Set.empty ) extends AnyBinding

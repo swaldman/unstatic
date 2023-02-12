@@ -1,6 +1,8 @@
 # TODO
 
  - warn or fail if no file exists @ hash-special media-dir refs
+ - Figure out multiplexing backend endpoints
+   - see e.g. https://github.com/softwaremill/tapir/pull/2724
  - Set up to easily include dashified untemplate fqn/identifier as CSS class
    - Maybe always keep identifiers sorted by shortest?
    - Supply identifiers as inputs?

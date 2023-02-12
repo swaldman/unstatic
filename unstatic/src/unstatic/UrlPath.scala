@@ -35,6 +35,10 @@ object UrlPath:
     private[UrlPath] def withIsDir( isDir : Boolean ) : T
     private[UrlPath] def withElementsIsDir( elements : Vector[String], isDir : Boolean ) : T
 
+    def isPrefixOf( other : T ) : Boolean =
+      val mySize = this.elements.size
+      other.elements.size > mySize && other.elements.take(mySize) == this.elements
+
     def isDir : Boolean
     def isLeaf : Boolean = !isDir
 
@@ -134,8 +138,6 @@ object UrlPath:
       Rooted.apply( elements, isDir)
     private[UrlPath] def aboveParent : Rooted = throw new BadPath("Attempted to take the parent of a root path.")
     def unroot : Rel = Rel( this.elements )
-    def isPrefixOf(other : Rooted) =
-      other.elements.length >= this.elements.length && (0 until this.elements.length).forall( i => this.elements(i) == other.elements(i))
     def isRoot : Boolean = elements.isEmpty
     def isRooted : Boolean = true
     override def toString() : String = "/" + super.toString()
