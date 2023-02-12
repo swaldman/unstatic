@@ -233,7 +233,7 @@ trait SimpleBlog extends ZTBlog:
           case Entry.Presentation.Single   => !entryTopLevelResolveHashSpecials
           case Entry.Presentation.Multiple => !multipleTopLevelResolveHashSpecials
           case Entry.Presentation.Rss      => true // there is never a potential higher-level resolver for RSS fragments
-      val sourceId = s"${renderLocation.siteRootedPath} - ${resolved.entryUntemplate.UntemplateFullyQualifiedName}"
+      val sourceId = s"entry-fragment[${presentation}](endpoint=${renderLocation.siteRootedPath}, source=${resolved.entryUntemplate.UntemplateName})"
       site.htmlFragmentResolveHashSpecials(sourceId, renderLocation.siteRootedPath, hashSpecialsUnresolvedHtml, Some(resolved.entryInfo.mediaPathSiteRooted), resolveEscapes)
     else
       hashSpecialsUnresolvedHtml

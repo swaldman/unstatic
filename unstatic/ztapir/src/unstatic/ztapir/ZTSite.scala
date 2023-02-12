@@ -434,32 +434,31 @@ trait ZTSite extends Site with ZTEndpointBinding.Source:
     mutateReplace("link","href")
 
   private def replaceMaybeHashSpecial( sourceId : String, sourceSiteRooted : Rooted, href : String, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : String =
-    if href(0) == '#' then
-      if href.startsWith("##") then
-        val id = href.drop(2)
-        siteRootedPathByIdentifier.get(id) match
-          case Some(path) => sourceSiteRooted.relativizeSibling(path).toString()
-          case None =>
-            scribe.warn(s"${sourceId}: Special hash reference '${href}' could not be resolved to an identifier, left as-is.")
-            href
-      else if href.startsWith("#/") then
-        val destSiteRooted = Rooted(href.drop(1))
+    if href.startsWith("##") then
+      val content = href.drop(2)
+      if content.startsWith("/") then
+        val destSiteRooted = Rooted(content)
         sourceSiteRooted.relativizeSibling(destSiteRooted).toString()
-      else if href.startsWith("#./") then
+      else if content.startsWith("./") then
         mbMediaDirSiteRooted match
           case Some( mediaDirSiteRooted ) =>
-            val relpath = Rel(href.drop(3))
+            val relpath = Rel(content.drop(2))
             val destSiteRooted = mediaDirSiteRooted.resolve(relpath)
             sourceSiteRooted.relativizeSibling(destSiteRooted).toString()
           case None =>
             scribe.warn(s"${sourceId}: Special hash reference '${href}' is relative to a mediaDir, but no mediaDir is available in this context. Left as-is.")
             href
-      else if href.startsWith("""#\""") then
-        if resolveEscapes then // we only unescape at the top level, otherwise we might accidentally escape to something later resolved
-          "#" + href.drop(2) // lose one backslash
+      else if content(0) == '\\' then
+        if resolveEscapes then // we only want to unescape at once, at a page's last pass, otherwise we might accidentally unescape to something later resolves
+          "##" + content.drop(1) // lose one backslash
         else
           href
       else
-        href
+        val id = content
+        siteRootedPathByIdentifier.get(id) match
+          case Some(path) => sourceSiteRooted.relativizeSibling(path).toString()
+          case None =>
+            scribe.warn(s"${sourceId}: Special hash reference '${href}' could not be interpreted or resolved to an identifier, left as-is.")
+            href
     else
       href
