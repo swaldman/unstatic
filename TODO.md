@@ -1,6 +1,10 @@
 # TODO
 
- - Set up to easily include dashified untemplate fqn as CSS class
+ - warn or fail if no file exists @ hash-special media-dir refs
+ - Set up to easily include dashified untemplate fqn/identifier as CSS class
+   - Maybe always keep identifiers sorted by shortest?
+   - Supply identifiers as inputs?
+   - Or maybe just have users use <( attrs("Anchor") )>
  - Flag to auto-open a browser window to site root on
    server startup.
  - Main executable: Be sure to print failure information.

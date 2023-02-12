@@ -56,4 +56,5 @@ object Attribute:
     case `Permalink`    extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `MediaDir`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `LinkName`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
+    case `Anchor`       extends Key[String]      (Key.Converter.SimpleString,             "Uid" :: Nil)
 

@@ -206,6 +206,9 @@ trait SimpleBlog extends ZTBlog:
 
   def mediaDir( resolved : EntryResolved ) : SiteLocation = SiteLocation( resolved.entryInfo.mediaPathSiteRooted, site )
 
+  override def identifiers( resolved : EntryResolved ) : immutable.Set[String] =
+    super.identifiers(resolved) ++ Attribute.Key.`Anchor`.caseInsensitiveCheck(resolved.entryUntemplate)
+
   /**
    * Lays out only the entry, the fragment which will later become the main content of the page
    */
