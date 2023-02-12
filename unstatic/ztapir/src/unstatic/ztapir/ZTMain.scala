@@ -172,14 +172,23 @@ object ZTMain:
         case Some(identifier) => Console.printLine(s"    uid: ${identifier}")
         case None             => Console.printLine( "    uid: <no-unique-identifiers>" )
 
-  private def printInfoByType( binding : AnyBinding ) : Task[Unit] =
+  private def printInfoByType( site : ZTSite, binding : AnyBinding ) : Task[Unit] =
     binding match
       case slb : StaticLocationBinding =>
         Console.printLine("  Copy-on-gen filesystem location.") *> Console.printLine(s"    source-dir: ${slb.source}")
       case fsd : ZTEndpointBinding.FromStaticDirectory =>
         Console.printLine("  Static HTTP service endpoint.") *> Console.printLine(s"    source-dir: ${fsd.dir}")
       case sg : ZTEndpointBinding.StringGenerable =>
-        Console.printLine(s"  String endpoint of type '${sg.contentType}'.") *> Console.printLine("  Static generation and HTTP service.") *> sg.mediaDirSiteRooted.fold(ZIO.unit)(mdsr => Console.printLine(s"    media-dir: ${mdsr}"))
+        Console.printLine(s"  String endpoint of type '${sg.contentType}'.") *>
+        Console.printLine("  Static generation and HTTP service.") *>
+          sg.mediaDirSiteRooted.fold(ZIO.unit) { mdsr =>
+            Console.printLine(s"    media-dir: ${mdsr}") *>
+            site.enforceUserContentFrom.fold(ZIO.unit) { userRoot =>
+              val mediaDir = userRoot.resolve(mdsr.unroot.toString())
+              Console.printLine("    media-dir (absolute): ") *>
+              Console.printLine(s"      ${mediaDir.toAbsolutePath.toString}")
+            }
+          }
       case bg : ZTEndpointBinding.BytesGenerable =>
         Console.printLine(s"  Binary endpoint of type '${bg.contentType}'.") *> Console.printLine("  Static generation and HTTP service.")
       case generic : ZTEndpointBinding.Generic[?,?] =>
@@ -196,7 +205,7 @@ object ZTMain:
       bindings.map { binding =>
         for
           _ <- Console.printLine(s"Location: ${binding.siteRootedPath.toString()}")
-          _ <- printInfoByType(binding)
+          _ <- printInfoByType( site, binding)
           _ <- printIdentifiers( binding.identifiers, site, cfg )
         yield ()
     }
