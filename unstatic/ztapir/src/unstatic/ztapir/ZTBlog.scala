@@ -19,9 +19,6 @@ trait ZTBlog extends Blog with ZTEndpointBinding.Source:
   // you can override this
   val memoize = true
 
-  // you can override this
-  lazy val topLevelMediaDir = site.location(frontPage.siteRootedPath.resolveSibling("media"))
-
   def mediaDir( resolved : EntryResolved ) : SiteLocation
 
   def endpointBindings : immutable.Seq[ZTEndpointBinding] =
@@ -33,7 +30,7 @@ trait ZTBlog extends Blog with ZTEndpointBinding.Source:
       }.toVector
     val frontPageBinding =
       val maxToRender = maxFrontPageEntries.getOrElse( Int.MaxValue )
-      site.publicReadOnlyHtml(frontPage, ZIO.attempt( renderTop( frontPage, maxToRender ) ), Some(topLevelMediaDir.siteRootedPath), frontPageIdentifiers, resolveHashSpecials, memoize)
+      site.publicReadOnlyHtml(frontPage, ZIO.attempt( renderTop( frontPage, maxToRender ) ), None, frontPageIdentifiers, resolveHashSpecials, memoize)
     entryPageBindings :+ frontPageBinding
 
 
