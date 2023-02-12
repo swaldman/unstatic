@@ -58,10 +58,10 @@ trait SimpleBlog extends ZTBlog:
     val entryUntemplate = resolved.entryUntemplate
     val absPermalink = site.absFromSiteRooted(resolved.entryInfo.permalinkPathSiteRooted)
     val permalinkRelativeHtml = renderSingleFragment(SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, Entry.Presentation.Rss)
-    val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
-    val jsoupDocAbsolutized = resolveRelativeUrls(jsoupDoc)
-    val absolutizedHtml = jsoupDocAbsolutized.body().html
-    val summary = rssSummaryAsDescription(jsoupDocAbsolutized)
+    val (absolutizedHtml, summary) =
+      val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
+      mutateResolveRelativeUrls(jsoupDoc)
+      (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc))
     val nospamAuthor =
       if entryInfo.authors.nonEmpty then s"""nospam@dev.null (${entryInfo.authors.mkString(", ")})""" else "nospam@dev.null"
     val standardItem =
@@ -227,11 +227,14 @@ trait SimpleBlog extends ZTBlog:
     val info = resolved.entryInfo
     val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, info.mbTitle, info.authors, info.tags, info.pubDate, SiteLocation(info.permalinkPathSiteRooted,site), presentation )
     val hashSpecialsUnresolvedHtml = layoutEntry( layoutEntryInput )
-    if (resolveHashSpecials) then
-      val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(hashSpecialsUnresolvedHtml)
+    if entryFragmentsResolveHashSpecials then
+      val resolveEscapes = // we only want to do this once for each piece of text
+        presentation match
+          case Entry.Presentation.Single   => !entryTopLevelResolveHashSpecials
+          case Entry.Presentation.Multiple => !multipleTopLevelResolveHashSpecials
+          case Entry.Presentation.Rss      => true // there is never a potential higher-level resolver for RSS fragments
       val sourceId = s"${renderLocation.siteRootedPath} - ${resolved.entryUntemplate.UntemplateFullyQualifiedName}"
-      site.mutateHtmlResolveHashSpecials( jsoupDoc, sourceId, renderLocation.siteRootedPath, Some(resolved.entryInfo.mediaPathSiteRooted), false )
-      jsoupDoc.body().html
+      site.htmlFragmentResolveHashSpecials(sourceId, renderLocation.siteRootedPath, hashSpecialsUnresolvedHtml, Some(resolved.entryInfo.mediaPathSiteRooted), resolveEscapes)
     else
       hashSpecialsUnresolvedHtml
 

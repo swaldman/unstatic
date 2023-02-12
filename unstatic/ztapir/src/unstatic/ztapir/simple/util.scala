@@ -47,17 +47,13 @@ private val ContentTypeBySuffix = immutable.Map (
 )
 
 // expects a (mutable) Jsoup Document parsed with a base URL!
-// return the modified document for a fluent API style
 // thanks https://stackoverflow.com/a/26956350/1413240
-private def resolveRelativeUrls( doc : JsoupDocument ) : JsoupDocument =
+private def mutateResolveRelativeUrls( doc : JsoupDocument ) : Unit =
   import scala.jdk.CollectionConverters._
   def absolutize(cssQuery : String, refAttr : String) =
     doc.select(cssQuery).asScala.foreach( elem => elem.attr(refAttr, elem.absUrl(refAttr)))
   absolutize("a", "href")
   absolutize("img","src")
-  doc
-
-
 
 private def parseTimestampIsoInstant(timestamp: String): Try[Instant] =
   for

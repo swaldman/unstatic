@@ -387,25 +387,45 @@ trait ZTSite extends Site with ZTEndpointBinding.Source:
   lazy val siteRootedPathByIdentifier =
     allBindings.reverse.flatMap( b => b.identifiers.toSeq.map(id => (id, b.siteRootedPath)) ).toMap
 
+  /**
+   * a "master switch", should not generally be used (html outputs determine their own hash-special resolution policy),
+   * but implemented so we can compare generation times, understand just how performance-costly the current Jsoup-based
+   * resolution approach is.
+   *
+   * override this to true to disable all hash special resolution
+   */
+  val disableAllResolveHashSpecials = false
+
   def publicReadOnlyHtml(siteLocation: SiteLocation, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String], resolveHashSpecials : Boolean, memoize : Boolean ) : ZTEndpointBinding =
     def resolvingTask : zio.Task[String] =
       val sourceSiteRooted = siteLocation.siteRootedPath
-      task.map( rawHtml => htmlResolveHashSpecials(sourceSiteRooted.toString(), siteLocation.siteRootedPath, rawHtml ) )
+      task.map( rawHtml => htmlResolveHashSpecials(sourceSiteRooted.toString(), siteLocation.siteRootedPath, rawHtml, mediaDirSiteRooted, true ) )
     val base        : zio.Task[String] = if resolveHashSpecials then resolvingTask else task
     val mbMemoizing : zio.Task[String] = if memoize then base.memoize.flatten else base
     ZTEndpointBinding.publicReadOnlyHtml(siteLocation, mbMemoizing, mediaDirSiteRooted, identifiers )
 
-  private def htmlResolveHashSpecials( sourceId : String, sourceSiteRooted : Rooted, unresolvedHtml : String ) : String =
-    val jsoupDoc = org.jsoup.Jsoup.parse(unresolvedHtml)
-    mutateHtmlResolveHashSpecials( jsoupDoc, sourceId, sourceSiteRooted, None, true )
-    jsoupDoc.outerHtml()
+  def htmlResolveHashSpecials( sourceId : String, sourceSiteRooted : Rooted, unresolvedHtml : String, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : String =
+    if disableAllResolveHashSpecials then
+      unresolvedHtml
+    else
+      val jsoupDoc = org.jsoup.Jsoup.parse(unresolvedHtml)
+      mutateHtmlResolveHashSpecials( jsoupDoc, sourceId, sourceSiteRooted, mbMediaDirSiteRooted, resolveEscapes )
+      jsoupDoc.outerHtml()
 
-  def mutateHtmlResolveHashSpecials( parentElem : Element, sourceId : String, sourceSiteRooted : Rooted, mbMediaDirSiteRooted : Option[Rooted], atTopLevel : Boolean ) : Unit =
+  def htmlFragmentResolveHashSpecials( sourceId : String, sourceSiteRooted : Rooted, unresolvedHtml : String, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : String =
+    if disableAllResolveHashSpecials then
+      unresolvedHtml
+    else
+      val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(unresolvedHtml)
+      mutateHtmlResolveHashSpecials( jsoupDoc, sourceId, sourceSiteRooted, mbMediaDirSiteRooted, resolveEscapes )
+      jsoupDoc.body().html
+
+  private def mutateHtmlResolveHashSpecials( parentElem : Element, sourceId : String, sourceSiteRooted : Rooted, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : Unit =
     def mutateReplace(cssQuery : String, refAttr : String) : Unit =
       import scala.jdk.CollectionConverters._
       parentElem.select(cssQuery).asScala.foreach { elem =>
         val rawHref = elem.attr(refAttr)
-        val shinyHref = replaceMaybeHashSpecial(sourceId, sourceSiteRooted, rawHref, mbMediaDirSiteRooted, atTopLevel)
+        val shinyHref = replaceMaybeHashSpecial(sourceId, sourceSiteRooted, rawHref, mbMediaDirSiteRooted, resolveEscapes)
         elem.attr(refAttr, shinyHref)
       }
 
@@ -413,7 +433,7 @@ trait ZTSite extends Site with ZTEndpointBinding.Source:
     mutateReplace("img","src")
     mutateReplace("link","href")
 
-  private def replaceMaybeHashSpecial( sourceId : String, sourceSiteRooted : Rooted, href : String, mbMediaDirSiteRooted : Option[Rooted], atTopLevel : Boolean ) : String =
+  private def replaceMaybeHashSpecial( sourceId : String, sourceSiteRooted : Rooted, href : String, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : String =
     if href(0) == '#' then
       if href.startsWith("##") then
         val id = href.drop(2)
@@ -435,7 +455,7 @@ trait ZTSite extends Site with ZTEndpointBinding.Source:
             scribe.warn(s"${sourceId}: Special hash reference '${href}' is relative to a mediaDir, but no mediaDir is available in this context. Left as-is.")
             href
       else if href.startsWith("""#\""") then
-        if atTopLevel then // we only unescape at the top level, otherwise we might accidentally escape to something later resolved
+        if resolveEscapes then // we only unescape at the top level, otherwise we might accidentally escape to something later resolved
           "#" + href.drop(2) // lose one backslash
         else
           href
