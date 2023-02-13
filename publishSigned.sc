@@ -1,3 +1,5 @@
+#!/usr/bin/env -S scala-cli shebang
+
 // expects SONATYPE_USERNAME and SONATYPE_PASSWORD to be set prior to running!
 
 val console = System.console()
