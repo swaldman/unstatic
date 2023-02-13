@@ -1,5 +1,7 @@
 # TODO
 
+ - get rid of parallel, reduntant nonZT location bindings.
+   - For ZT apps, just use ZTEndpoits 
  - warn or fail if no file exists @ hash-special media-dir refs
  - Figure out multiplexing backend endpoints
    - see e.g. https://github.com/softwaremill/tapir/pull/2724

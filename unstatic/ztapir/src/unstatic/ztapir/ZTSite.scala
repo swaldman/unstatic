@@ -15,6 +15,16 @@ object ZTSite:
     def endpointBindings : immutable.Seq[ZTEndpointBinding] = endpointBindingSources.flatMap( _.endpointBindings )
   end Composite
 
+  trait SingleRootComposite( rootDir : JPath ) extends Composite:
+    override val enforceUserContentFrom = Some(rootDir)
+
+    private lazy val nonZtRootBinding = StaticLocationBinding( Rooted.root, rootDir, immutable.Set("staticRoot") )
+    override def locationBindings : immutable.Seq[StaticLocationBinding] = super.locationBindings :+ nonZtRootBinding
+
+    private lazy val rootBinding = ZTEndpointBinding.staticDirectoryServing(Rooted.root, this, rootDir, immutable.Set("staticRoot"))
+    override def endpointBindings : immutable.Seq[ZTEndpointBinding] = super.endpointBindings :+ rootBinding
+  end SingleRootComposite
+
 trait ZTSite extends Site with ZTEndpointBinding.Source:
   override def allBindings : immutable.Seq[AnyBinding] = this.endpointBindings ++ super.allBindings
 
