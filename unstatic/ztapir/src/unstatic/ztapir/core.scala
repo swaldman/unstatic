@@ -95,4 +95,6 @@ private def publicReadOnlyUtf8RssEndpoint( siteRootedPath: Rooted, site : Site, 
 
 private def staticDirectoryServingEndpoint(siteRootedPath: Rooted, site: Site, dir: JPath): ZTServerEndpoint =
   val serverRootedPath = site.serverRootedPath(siteRootedPath)
-  filesGetServerEndpoint[Task](inputsForFixedPath(serverRootedPath))(dir.toAbsolutePath.toString)
+  // see https://tapir.softwaremill.com/en/latest/endpoint/static.html
+  val inputs = if serverRootedPath.isRoot then emptyInput else inputsForFixedPath(serverRootedPath)
+  filesGetServerEndpoint[Task](inputs)(dir.toAbsolutePath.toString)

@@ -39,6 +39,7 @@ private object ZTStaticGen:
     genSiteRootDir          : JPath,
     ignorePrefixes          : immutable.Seq[Rooted] = Nil
   ) : Task[Result] =
+    scribe.trace("generate(...)")
     val (ignoredEndpointBindings, unignoredEndpointBindings)
       = endpointBindings.partition( epb => ignorePrefixes.exists(pfx => pfx.isPrefixOf(epb.siteRootedPath)) )
 
@@ -113,5 +114,6 @@ private object ZTStaticGen:
     ZIO.foreachDiscard(locationTasks ++ endpointTasks)(identity).map( _ => noExceptionResult )
 
   def generateZTSite( site : ZTSite, genSiteRootDir: JPath, ignorePrefixes: immutable.Seq[Rooted] = Nil) : Task[Result] =
+    scribe.trace("generateZTSite(...)")
     generate( site.endpointBindings, site.locationBindings, genSiteRootDir, ignorePrefixes )
 

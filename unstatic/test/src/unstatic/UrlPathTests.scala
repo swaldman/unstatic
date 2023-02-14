@@ -70,4 +70,7 @@ object UrlPathTests extends TestSuite:
       test - assert( Rel(Vector("dir","subdir"), false).parent.toString() == "dir/" )
       test - assert( Rel(Vector("dir","subdir"), false).parent.asLeaf.toString() == "dir" )
     }
+    test("UrlPath.Rooted.embedRoot") {
+      test - assert( Rooted.root.embedRoot(Rooted.root) == Rooted.root )
+    }
   }

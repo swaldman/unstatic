@@ -153,6 +153,7 @@ object ZTMain:
     server.provide(configLayer, Server.live)
 
   def generate( site : ZTSite )(using cfg : Config.Static) =
+    scribe.trace( s"generate( ${site} )")
     ZTStaticGen.generateZTSite( site, cfg.generateTo, cfg.noGenPrefixes )
 
   private def matchesSubstring( binding : AnyBinding, substr : String ) : Boolean =
@@ -321,6 +322,7 @@ abstract class ZTMain(site: ZTSite, executableName : String = "unstatic") extend
       case _ => throw new BadCommandLine("Bad command line options provided: " + args.mkString(" "))
 
   def work( cfg : Config ) : Task[ZTStaticGen.Result] | Task[Unit] =
+    scribe.trace( s"work( ${cfg} )")
     val genTask   = generate(site)(using cfg.cfgStatic)
     val serveTask = serve(site)(using cfg.cfgDynamic)
     val listTask  = list(site)(using cfg.cfgList)
@@ -352,6 +354,29 @@ abstract class ZTMain(site: ZTSite, executableName : String = "unstatic") extend
         _ <- Console.printLine(header)
         _ <- ZIO.foreach(sortedEndpoints)( endpoint => Console.printLine(s" \u27A3 ${endpoint.siteRootedPath} <- ${endpoint.source}"))
       yield ()
+
+  /*
+  // we were trying to debug a silent failure issue, hypothesized that
+  // a fatal error was the issue. it was not, fatal errors are properly
+  // logged, the issue is that failures represented by Cause are not
+  // caught by tapError(...), so under some circumstances the app failed
+  // silently and inscrutably.
+
+  def logFatal( t : Throwable ) : Nothing =
+    scribe.error("Fatal error!!!", t)
+    throw t
+
+  // modified from https://github.com/poslegm/munit-zio/blob/b6708da58ba1963166fff404c6209c80d3f3f775/core/src/main/scala/munit/ZRuntime.scala
+  override def runtime: Runtime[Any] =
+    Unsafe.unsafe { implicit unsafe =>
+      Runtime.unsafe.fromLayer(Runtime.setReportFatal {
+        case cause =>
+          scribe.error("Fatal error!")
+          cause.printStackTrace
+          throw cause
+      })
+    }
+  */
 
 
   def reportResult( result : ZTStaticGen.Result ) : Task[Unit] =
@@ -386,6 +411,18 @@ abstract class ZTMain(site: ZTSite, executableName : String = "unstatic") extend
 
   override def run =
     runTask
+      .tapDefect { cause =>
+        scribe.error("Logging failures (but ugh, via ZIO.logCause(...)!!!")
+        // XXX: If I'm logging with scribe, I need some way to decode the
+        // cause into an exhaustive dump, rather than relying inconsistently
+        // on ZIO.logCause.
+        //
+        // But for now I want to be sure that failures are never silent.
+        // Didn't work:
+        //   ZIO.attempt(cause.failures.foreach(f => scribe.error("Failure!", f)))
+        ZIO.logCause(cause)
+      }
+      //.debug
       .catchSome { case _ : BadCommandLine => ZIO.unit }
       .tapError( reportFinalThrowable )
       .exitCode

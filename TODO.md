@@ -1,5 +1,9 @@
 # TODO
-
+ - extension to check attribute keys from entry untemplate?
+ - Keep (and commit in type to keeping) identifiers sorted by shortest
+ - See what breaks if you make input types less dependent...
+ - fqn-utils to simply filters, something on which you can define
+   "withPathElement" and "startsWith", etc.
  - get rid of parallel, reduntant nonZT location bindings.
    - For ZT apps, just use ZTEndpoits 
  - warn or fail if no file exists @ hash-special media-dir refs
@@ -11,9 +15,6 @@
    - Or maybe just have users use <( attrs("Anchor") )>
  - Flag to auto-open a browser window to site root on
    server startup.
- - Main executable: Be sure to print failure information.
-   - Right now, we exit silently (albeit with a failure 
-     exit code) when stuff happens
  - Better exceptions, search XXX and TODO
  - Add warnings in ZTStaticGen for eg root paths, 
    generableTo links that seem dir like, etc?
