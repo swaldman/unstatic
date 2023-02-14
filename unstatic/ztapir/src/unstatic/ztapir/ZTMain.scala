@@ -123,7 +123,7 @@ object ZTMain:
       // then we need to place the directory bindings with the index bindings to preserve
       // the intended priority of resolution
       val enrichedEndpointBindings =
-        endpointBindings.map { origBinding =>
+        endpointBindings.flatMap { origBinding =>
           origBinding match
             case gen : ZTEndpointBinding.Generable =>
               directoryIndexDirectoryBindingByIndexBinding.get(gen) match
@@ -131,7 +131,6 @@ object ZTMain:
                 case None                     => Seq( gen )
             case _ => Seq( origBinding )
         }
-        .flatten
 
       val enrichedEndpoints = enrichedEndpointBindings.map(_.ztServerEndpoint)
 
