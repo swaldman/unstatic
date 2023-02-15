@@ -344,14 +344,14 @@ abstract class ZTMain(site: ZTSite, executableName : String = "unstatic") extend
         _ <- ZIO.foreach(endpoints.map(_.toString).to(immutable.SortedSet))( endpoint => Console.printLine(s" \u27A3 ${endpoint}"))
       yield ()
 
-  def printCopiedWithHeader(header : String, staticEndpoints : immutable.Seq[StaticLocationBinding]) : Task[Unit] =
-    val sortedEndpoints = staticEndpoints.sortBy( _.siteRootedPath.toString )
+  def printCopiedWithHeader(header : String, staticEndpoints : immutable.Seq[Tuple2[Rooted,JPath]]) : Task[Unit] =
+    val sortedEndpoints = staticEndpoints.sortBy( _(0).toString )
     if staticEndpoints.isEmpty then
       ZIO.unit
     else
       for
         _ <- Console.printLine(header)
-        _ <- ZIO.foreach(sortedEndpoints)( endpoint => Console.printLine(s" \u27A3 ${endpoint.siteRootedPath} <- ${endpoint.source}"))
+        _ <- ZIO.foreach(sortedEndpoints)( endpoint => Console.printLine(s" \u27A3 ${endpoint(0)} <- ${endpoint(1)}"))
       yield ()
 
   /*

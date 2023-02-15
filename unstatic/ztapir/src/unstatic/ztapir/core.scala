@@ -98,3 +98,13 @@ private def staticDirectoryServingEndpoint(siteRootedPath: Rooted, site: Site, d
   // see https://tapir.softwaremill.com/en/latest/endpoint/static.html
   val inputs = if serverRootedPath.isRoot then emptyInput else inputsForFixedPath(serverRootedPath)
   filesGetServerEndpoint[Task](inputs)(dir.toAbsolutePath.toString)
+
+private def staticFileServingEndpoint(siteRootedPath: Rooted, site: Site, file: JPath): ZTServerEndpoint =
+  val serverRootedPath = site.serverRootedPath(siteRootedPath)
+  if siteRootedPath.isDir then
+    if siteRootedPath.isRoot || serverRootedPath.isRoot then // second case should be impossible without first
+      throw new MustRepresentDirectory(s"Illegal endpoint, the root directory must represent a directory, not a single file.")
+    else
+      scribe.warn(s"A UrlPath marked as a directory (would print with terminal slash) is given as endpoint for single file '${file}'.")
+  val inputs = inputsForFixedPath(serverRootedPath) // we know it's not root
+  fileGetServerEndpoint[Task](inputs)(file.toAbsolutePath.toString)
