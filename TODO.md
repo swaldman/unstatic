@@ -1,12 +1,10 @@
 # TODO
+ - warn on ZTEndpoint construction with inappropriate _.isDir for siteRootedPath 
  - extension to check attribute keys from entry untemplate?
  - Keep (and commit in type to keeping) identifiers sorted by shortest
  - See what breaks if you make input types less dependent...
  - fqn-utils to simply filters, something on which you can define
    "withPathElement" and "startsWith", etc.
- - get rid of parallel, reduntant nonZT location bindings.
-   - For ZT apps, just use ZTEndpoits 
- - warn or fail if no file exists @ hash-special media-dir refs
  - Figure out multiplexing backend endpoints
    - see e.g. https://github.com/softwaremill/tapir/pull/2724
  - Set up to easily include dashified untemplate fqn/identifier as CSS class
