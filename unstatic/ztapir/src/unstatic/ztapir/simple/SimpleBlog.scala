@@ -40,7 +40,7 @@ trait SimpleBlog extends ZTBlog:
   end Entry
   object Layout:
     object Input:
-      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, sourceEntry : EntryResolved, previousEntry : Option[EntryResolved], nextEntry : Option[EntryResolved], presentation : SimpleBlog.this.Entry.Presentation )
+      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, info : EntryInfo, sourceEntry : EntryResolved, previousEntry : Option[EntryResolved], nextEntry : Option[EntryResolved], presentation : SimpleBlog.this.Entry.Presentation )
       case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String, sourceEntries : immutable.Seq[EntryResolved] )
     end Input
   end Layout
@@ -218,26 +218,10 @@ trait SimpleBlog extends ZTBlog:
 
   def layoutPage( input : Layout.Input.Page ) : String
 
-  // WORKAROUND!!!
-  // temporary, until https://github.com/scala/bug/issues/12727 is fixed
-  // private lazy val tmpForwardSortedEntries = immutable.SortedSet.from( entriesResolved )( using Ordering.by( er => (er.entryInfo.pubDate, er.entryUntemplate.UntemplateFullyQualifiedName) ) )
-  private lazy val reverseChronoVec = entriesResolved.toVector
-  private lazy val resolvedToIndex = reverseChronoVec.zip(immutable.LazyList.from(0)).toMap
+  // see https://github.com/scala/bug/issues/12727
+  def previous( resolved : EntryResolved ) : Option[EntryResolved] = entriesResolved.rangeFrom(resolved).tail.headOption
 
-  def previous( resolved : EntryResolved ) : Option[EntryResolved] =
-    // entriesResolved.minAfter(resolved) // broken, see https://github.com/scala/bug/issues/12727
-    // tmpForwardSortedEntries.maxBefore( resolved )
-    val index = resolvedToIndex(resolved)
-    val prevIndex = index + 1 // reverse ordered!
-    if reverseChronoVec.size > prevIndex then Some(reverseChronoVec(prevIndex)) else None
-
-  def next( resolved : EntryResolved ) : Option[EntryResolved] =
-    // entriesResolved.maxBefore(resolved) // broken, see https://github.com/scala/bug/issues/12727
-    // tmpForwardSortedEntries.minAfter( resolved )
-    val index = resolvedToIndex(resolved)
-    val nextIndex = index - 1 // reverse ordered!
-    if nextIndex >= 0 then Some(reverseChronoVec(nextIndex)) else None
-
+  def next( resolved : EntryResolved ) : Option[EntryResolved] = entriesResolved.maxBefore(resolved)
 
   def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : String =
     val contentType = resolved.entryInfo.contentType
@@ -249,7 +233,7 @@ trait SimpleBlog extends ZTBlog:
     val htmlifierOptions = Htmlifier.Options(generatorFullyQualifiedName = Some(resolved.entryUntemplate.UntemplateFullyQualifiedName))
     val htmlResult = htmlifier(result.text, htmlifierOptions)
     val info = resolved.entryInfo
-    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, resolved, previous(resolved), next(resolved), presentation )
+    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, info, resolved, previous(resolved), next(resolved), presentation )
     val hashSpecialsUnresolvedHtml = layoutEntry( layoutEntryInput )
     if entryFragmentsResolveHashSpecials then
       val resolveEscapes = // we only want to do this once for each piece of text
