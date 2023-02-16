@@ -1,8 +1,5 @@
 # TODO
- - Keep (and commit in type to keeping) identifiers sorted by shortest
  - See what breaks if you make input types less dependent...
- - fqn-utils to simply filters, something on which you can define
-   "withPathElement" and "startsWith", etc.
  - Figure out multiplexing backend endpoints
    - see e.g. https://github.com/softwaremill/tapir/pull/2724
  - Set up to easily include dashified untemplate fqn/identifier as CSS class
