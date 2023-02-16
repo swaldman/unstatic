@@ -21,29 +21,34 @@ object ZTEndpointBinding:
   trait Source:
     def endpointBindings : immutable.Seq[ZTEndpointBinding]
 
+  val IdentifierOrdering = AnyBinding.IdentifierOrdering
+
   def staticDirectoryServing( siteRootedPath: Rooted, site: ZTSite, dir : JPath, identifiers : immutable.Set[String] ) : ZTEndpointBinding.FromStaticDirectory =
-    FromStaticDirectory(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), dir, identifiers)
+    FromStaticDirectory(siteRootedPath, staticDirectoryServingEndpoint( siteRootedPath, site, dir ), dir, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def staticDirectoryServing(siteLocation: ZTSite#SiteLocation, dir: JPath, identifiers : immutable.Set[String] ): ZTEndpointBinding.FromStaticDirectory =
     staticDirectoryServing(siteLocation.siteRootedPath, siteLocation.site, dir, identifiers)
 
   def staticFileServing( siteRootedPath: Rooted, site: ZTSite, file : JPath, identifiers : immutable.Set[String] ) : ZTEndpointBinding.FromStaticFile =
-    FromStaticFile(siteRootedPath, staticFileServingEndpoint( siteRootedPath, site, file ), file, identifiers)
+    FromStaticFile(siteRootedPath, staticFileServingEndpoint( siteRootedPath, site, file ), file, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def staticFileServing(siteLocation: ZTSite#SiteLocation, file: JPath, identifiers : immutable.Set[String] ): ZTEndpointBinding.FromStaticFile =
     staticFileServing(siteLocation.siteRootedPath, siteLocation.site, file, identifiers)
 
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.StringGenerable =
-    StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, mediaDirSiteRooted, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, identifiers )
+    StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, mediaDirSiteRooted, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def publicReadOnlyHtml(siteLocation: ZTSite#SiteLocation, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String] ): ZTEndpointBinding.StringGenerable =
     publicReadOnlyHtml(siteLocation.siteRootedPath, siteLocation.site, task, mediaDirSiteRooted, identifiers)
 
   def publicReadOnlyRss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.BytesGenerable =
-    BytesGenerable( siteRootedPath, publicReadOnlyUtf8RssEndpoint( siteRootedPath, site, task ), task, MediaTypeRss, identifiers )
+    BytesGenerable( siteRootedPath, publicReadOnlyUtf8RssEndpoint( siteRootedPath, site, task ), task, MediaTypeRss, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def publicReadOnlyRss(siteLocation: ZTSite#SiteLocation, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String] ): ZTEndpointBinding.BytesGenerable =
     publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task, identifiers)
+
+  def generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O], identifiers : immutable.Set[String]) : ZTEndpointBinding.Generic[I,O] =
+    Generic(siteRootedPath, ztServerEndpoint, coreLogic, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   sealed trait Generable extends ZTEndpointBinding:
     val contentType    : MediaType
@@ -52,18 +57,18 @@ object ZTEndpointBinding:
   sealed trait FromFileSystem extends ZTEndpointBinding:
     val source : JPath
 
-  case class StringGenerable(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[String], mediaDirSiteRooted : Option[Rooted], contentType : MediaType, charset : Charset, identifiers : immutable.Set[String]) extends Generable:
+  case class StringGenerable private[ZTEndpointBinding] (siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[String], mediaDirSiteRooted : Option[Rooted], contentType : MediaType, charset : Charset, identifiers : immutable.SortedSet[String]) extends Generable:
     val bytesGenerator = generator.map( s => immutable.ArraySeq.unsafeWrapArray(s.getBytes(charset)) )
-  case class BytesGenerable( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[immutable.ArraySeq[Byte]], contentType : MediaType, identifiers : immutable.Set[String] ) extends Generable:
+  case class BytesGenerable private[ZTEndpointBinding] ( siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, generator : Task[immutable.ArraySeq[Byte]], contentType : MediaType, identifiers : immutable.SortedSet[String] ) extends Generable:
     val bytesGenerator = generator
-  case class FromStaticDirectory(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, dir : JPath, identifiers : immutable.Set[String]) extends FromFileSystem:
+  case class FromStaticDirectory private[ZTEndpointBinding] (siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, dir : JPath, identifiers : immutable.SortedSet[String]) extends FromFileSystem:
     val source = dir
-  case class FromStaticFile(siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, file : JPath, identifiers : immutable.Set[String]) extends FromFileSystem:
+  case class FromStaticFile private[ZTEndpointBinding] (siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, file : JPath, identifiers : immutable.SortedSet[String]) extends FromFileSystem:
     val source = file
-  case class Generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O], identifiers : immutable.Set[String]) extends ZTEndpointBinding
+  case class Generic[I,O] private[ZTEndpointBinding] (siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O], identifiers : immutable.SortedSet[String]) extends ZTEndpointBinding
 
 // Keys (initial elements) are site-rooted, but endpoints are server rooted!
 sealed trait ZTEndpointBinding extends AnyBinding:
   val siteRootedPath : Rooted
   val ztServerEndpoint : ZTServerEndpoint
-  val identifiers : immutable.Set[String]
+  val identifiers : immutable.SortedSet[String]

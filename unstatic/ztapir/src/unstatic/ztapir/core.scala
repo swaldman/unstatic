@@ -74,7 +74,7 @@ val MediaTypeRss = MediaType("application","rss+xml",None,immutable.Map.empty[St
 private def redirectZTEndpointBinding( fromServerRooted : Rooted, toServerRooted : Rooted, site : Site ) : ZTEndpointBinding =
   val endpoint = redirectEndpoint(fromServerRooted,toServerRooted)
   val ztServerEndpoint = endpoint.zServerLogic( UnitUnitUnitLogic ).glitchWiden
-  ZTEndpointBinding.Generic[Unit,Unit](site.siteRootedPath(fromServerRooted), ztServerEndpoint, UnitThrowableUnitLogic, NoIdentifiers)
+  ZTEndpointBinding.generic[Unit,Unit](site.siteRootedPath(fromServerRooted), ztServerEndpoint, UnitThrowableUnitLogic, NoIdentifiers)
 
 private def publicReadOnlyUtf8HtmlEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
   val endpoint =

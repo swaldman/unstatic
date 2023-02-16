@@ -90,7 +90,7 @@ object ZTMain:
                         .out( redirectOutputs(serverRootedDirIndexPathParent) )
                         .zServerLogic( UnitUnitUnitLogic )
                         .glitchWiden
-                    ZTEndpointBinding.Generic( site.siteRootedPath(asLeaf), ztServerEndpoint, UnitThrowableUnitLogic, NoIdentifiers )
+                    ZTEndpointBinding.generic( site.siteRootedPath(asLeaf), ztServerEndpoint, UnitThrowableUnitLogic, NoIdentifiers )
                   val slashEndpointBinding =
                     val basicEndpoint =
                       endpointForFixedPath(serverRootedDirIndexPathParent)
@@ -106,7 +106,7 @@ object ZTMain:
                             .out(if htmlUtf8 then htmlBodyUtf8 else stringBody(sg.charset))
                             .zServerLogic( errMapped(coreLogic) )
                             .glitchWiden
-                        ZTEndpointBinding.Generic(site.siteRootedPath(serverRootedDirIndexPathParent), ztse, coreLogic, NoIdentifiers)
+                        ZTEndpointBinding.generic(site.siteRootedPath(serverRootedDirIndexPathParent), ztse, coreLogic, NoIdentifiers)
                       case otherGenerable =>
                         val coreLogic = (_:Unit) => otherGenerable.bytesGenerator
                         val ztse =
@@ -114,7 +114,7 @@ object ZTMain:
                             .out( byteArrayBody )
                             .zServerLogic(errMapped(coreLogic.andThen( _.map(_.toArray) )))
                             .glitchWiden
-                        ZTEndpointBinding.Generic(site.siteRootedPath(serverRootedDirIndexPathParent), ztse, coreLogic, NoIdentifiers)
+                        ZTEndpointBinding.generic(site.siteRootedPath(serverRootedDirIndexPathParent), ztse, coreLogic, NoIdentifiers)
                   Seq( redirectEndpointBinding, slashEndpointBinding )
             ( fullIndexBinding, redirectBindings )
           }
@@ -163,8 +163,9 @@ object ZTMain:
       binding.identifiers.view.map( _.toLowerCase ).exists(str => str.indexOf(substr) >= 0)
 
   private def printIdentifierLine( id : String ) = Console.printLine("     \u27A3 " + id)
-  private def printIdentifiers( ids : immutable.Set[String], site : ZTSite, cfg : Config.List ) : Task[Unit] =
-    val byLenUids = ids.toVector.sortBy( s => (s.length, s) ).filter(id => !site.duplicateIdentifiers(id))
+  private def printIdentifiers( binding : ZTEndpointBinding, site : ZTSite, cfg : Config.List ) : Task[Unit] =
+    // binding identifiers are always sorted first by length (shortest first), then by String ordering
+    val byLenUids = binding.identifiers.toVector.filter(id => !site.duplicateIdentifiers(id))
     if cfg.allIdentifiers then
       Console.printLine( "    identifiers (unique):" ) *> ZIO.foreachDiscard( byLenUids.map( printIdentifierLine ) )(identity)
     else
@@ -199,14 +200,14 @@ object ZTMain:
   def list( site : ZTSite )(using cfg : Config.List) : Task[Unit] =
     val bindings =
       cfg.substringToMatch match
-        case Some(substr) => site.allBindings.filter(binding => matchesSubstring(binding, substr))
-        case None         => site.allBindings
+        case Some(substr) => site.endpointBindings.filter(binding => matchesSubstring(binding, substr))
+        case None         => site.endpointBindings
     val bindingsPrinters =
       bindings.map { binding =>
         for
           _ <- Console.printLine(s"Location: ${binding.siteRootedPath.toString()}")
           _ <- printInfoByType( site, binding)
-          _ <- printIdentifiers( binding.identifiers, site, cfg )
+          _ <- printIdentifiers( binding, site, cfg )
         yield ()
     }
     ZIO.foreachDiscard(bindingsPrinters)(identity)
