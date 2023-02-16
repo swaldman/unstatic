@@ -40,7 +40,7 @@ trait SimpleBlog extends ZTBlog:
   end Entry
   object Layout:
     object Input:
-      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, sourceEntry : EntryResolved, presentation : SimpleBlog.this.Entry.Presentation )
+      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, sourceEntry : EntryResolved, previousEntry : Option[EntryResolved], nextEntry : Option[EntryResolved], presentation : SimpleBlog.this.Entry.Presentation )
       case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String, sourceEntries : immutable.Seq[EntryResolved] )
     end Input
   end Layout
@@ -228,7 +228,7 @@ trait SimpleBlog extends ZTBlog:
     val htmlifierOptions = Htmlifier.Options(generatorFullyQualifiedName = Some(resolved.entryUntemplate.UntemplateFullyQualifiedName))
     val htmlResult = htmlifier(result.text, htmlifierOptions)
     val info = resolved.entryInfo
-    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, resolved, presentation )
+    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, resolved, entriesResolved.maxBefore(resolved), entriesResolved.minAfter(resolved), presentation )
     val hashSpecialsUnresolvedHtml = layoutEntry( layoutEntryInput )
     if entryFragmentsResolveHashSpecials then
       val resolveEscapes = // we only want to do this once for each piece of text
