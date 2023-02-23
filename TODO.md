@@ -1,11 +1,8 @@
 # TODO
+ - Support hash-specials like ##post-id#anchor-within-post
  - See what breaks if you make input types less dependent...
  - Figure out multiplexing backend endpoints
    - see e.g. https://github.com/softwaremill/tapir/pull/2724
- - Set up to easily include dashified untemplate fqn/identifier as CSS class
-   - Maybe always keep identifiers sorted by shortest?
-   - Supply identifiers as inputs?
-   - Or maybe just have users use <( attrs("Anchor") )>
  - Flag to auto-open a browser window to site root on
    server startup.
  - Better exceptions, search XXX and TODO
