@@ -1,4 +1,5 @@
 # TODO
+ - it would be nice to have non-media-dir-dependent hash-specials more universally available
  - extension to check attribute keys from entry untemplate?
  - Keep (and commit in type to keeping) identifiers sorted by shortest
  - See what breaks if you make input types less dependent...
