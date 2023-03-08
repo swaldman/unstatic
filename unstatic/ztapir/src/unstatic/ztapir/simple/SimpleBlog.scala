@@ -40,7 +40,7 @@ trait SimpleBlog extends ZTBlog:
   end Entry
   object Layout:
     object Input:
-      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, sourceEntry : EntryResolved, presentation : SimpleBlog.this.Entry.Presentation )
+      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, info : EntryInfo, sourceEntry : EntryResolved, previousEntry : Option[EntryResolved], nextEntry : Option[EntryResolved], presentation : SimpleBlog.this.Entry.Presentation )
       case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String, sourceEntries : immutable.Seq[EntryResolved] )
     end Input
   end Layout
@@ -152,7 +152,7 @@ trait SimpleBlog extends ZTBlog:
    * Reverse-chronological!
    */
   given entryOrdering : Ordering[EntryResolved] =
-    Ordering.by( (er : EntryResolved) => (er.entryInfo.pubDate, er.entryUntemplate.UntemplatePackage, er.entryUntemplate.UntemplateName) ).reverse
+    Ordering.by( (er : EntryResolved) => (er.entryInfo.pubDate, er.entryUntemplate.UntemplateFullyQualifiedName) ).reverse
 
   val site                : Site // the type is Blog.this.Site, narrowed to ZTSite by ZTBlog
   val frontPage           : SiteLocation
@@ -218,6 +218,11 @@ trait SimpleBlog extends ZTBlog:
 
   def layoutPage( input : Layout.Input.Page ) : String
 
+  // see https://github.com/scala/bug/issues/12727
+  def previous( resolved : EntryResolved ) : Option[EntryResolved] = entriesResolved.rangeFrom(resolved).tail.headOption
+
+  def next( resolved : EntryResolved ) : Option[EntryResolved] = entriesResolved.maxBefore(resolved)
+
   def renderSingleFragment( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : String =
     val contentType = resolved.entryInfo.contentType
     val htmlifier = htmlifierForContentType(contentType).getOrElse {
@@ -228,7 +233,7 @@ trait SimpleBlog extends ZTBlog:
     val htmlifierOptions = Htmlifier.Options(generatorFullyQualifiedName = Some(resolved.entryUntemplate.UntemplateFullyQualifiedName))
     val htmlResult = htmlifier(result.text, htmlifierOptions)
     val info = resolved.entryInfo
-    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, resolved, presentation )
+    val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, info, resolved, previous(resolved), next(resolved), presentation )
     val hashSpecialsUnresolvedHtml = layoutEntry( layoutEntryInput )
     if entryFragmentsResolveHashSpecials then
       val resolveEscapes = // we only want to do this once for each piece of text

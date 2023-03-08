@@ -10,7 +10,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 object ZTSite:
-  trait Composite extends ZTSite with Site.Composite:
+  trait Composite extends ZTSite:
     def endpointBindingSources : immutable.Seq[ZTEndpointBinding.Source]
     def endpointBindings : immutable.Seq[ZTEndpointBinding] = endpointBindingSources.flatMap( _.endpointBindings )
   end Composite
@@ -18,15 +18,12 @@ object ZTSite:
   trait SingleRootComposite( rootDir : JPath ) extends Composite:
     override val enforceUserContentFrom = Some(rootDir)
 
-    private lazy val nonZtRootBinding = StaticLocationBinding( Rooted.root, rootDir, immutable.Set("staticRoot") )
-    override def locationBindings : immutable.Seq[StaticLocationBinding] = super.locationBindings :+ nonZtRootBinding
-
     private lazy val rootBinding = ZTEndpointBinding.staticDirectoryServing(Rooted.root, this, rootDir, immutable.Set("staticRoot"))
     override def endpointBindings : immutable.Seq[ZTEndpointBinding] = super.endpointBindings :+ rootBinding
   end SingleRootComposite
 
-trait ZTSite extends Site with ZTEndpointBinding.Source:
-  override def allBindings : immutable.Seq[AnyBinding] = this.endpointBindings ++ super.allBindings
+trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers:
+  override def allBindings : immutable.Seq[AnyBinding] = this.endpointBindings
 
   val enforceUserContentFrom : Option[JPath]
 

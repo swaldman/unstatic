@@ -27,11 +27,6 @@ def fqnSuffixes( ut : Untemplate.AnyUntemplate ) : List[String] =
 
   suffixes(fqnList, Nil).map( _.mkString(".") )
 
-trait AnyBinding:
-  def siteRootedPath : Rooted
-  def identifiers    : immutable.Set[String]
-
-
 
 
 

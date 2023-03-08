@@ -12,6 +12,14 @@ import scala.collection.*
 
 object Attribute:
   object Key:
+    extension ( ut : Untemplate.AnyUntemplate )
+      def checkAttributeKeyStrict[T]( key : Attribute.Key[T] )  : Option[T] = key.caseSensitiveCheck( ut )
+      def checkAttributeKey[T]( key : Attribute.Key[T] ) : Option[T] = key.caseInsensitiveCheck( ut )
+
+    extension ( resolved : SimpleBlog#EntryResolved )
+      def checkAttributeKeyStrict[T]( key : Attribute.Key[T] )  : Option[T] = key.caseSensitiveCheck( resolved.entryUntemplate )
+      def checkAttributeKey[T]( key : Attribute.Key[T] ) : Option[T] = key.caseInsensitiveCheck( resolved.entryUntemplate )
+
     object Converter:
       val SimpleString : Converter[String] =
         (a : Any) =>

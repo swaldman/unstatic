@@ -3,14 +3,7 @@ package unstatic
 import scala.collection.*
 import unstatic.UrlPath.*
 
-object Site:
-  trait Composite extends Site:
-    def locationBindingSources : immutable.Seq[StaticLocationBinding.Source]
-
-    def locationBindings : immutable.Seq[StaticLocationBinding] = locationBindingSources.flatMap( _.locationBindings )
-  end Composite
-
-trait Site extends StaticLocationBinding.Source:
+trait Site:
   def serverUrl : Abs
   def basePath  : Rooted
   def sitePath  : Abs = serverUrl.embedRoot(basePath)
@@ -48,8 +41,3 @@ trait Site extends StaticLocationBinding.Source:
     override def toString()            : String       = this.serverRootedPath.toString()
 
   lazy val siteRootLocation = SiteLocation( Rooted.root )
-
-  def allBindings : immutable.Seq[AnyBinding] = this.locationBindings
-
-  lazy val duplicateIdentifiers : immutable.Set[String] =
-    allBindings.flatMap( _.identifiers ).groupBy(identity).filter(_(1).size > 1).map(_(0)).toSet
