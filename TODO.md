@@ -1,4 +1,5 @@
 # TODO
+ - define a giter8 seed that fully sets up a skeletal site
  - it would be nice to have non-media-dir-dependent hash-specials more universally available
  - extension to check attribute keys from entry untemplate?
  - Keep (and commit in type to keeping) identifiers sorted by shortest
