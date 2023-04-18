@@ -34,7 +34,7 @@ object Attribute:
       val Timestamp : Converter[Instant]  =
         (a : Any) =>
           a match
-            case s : String  => parseTimestamp(s).toOption
+            case s : String  => Some( parseTimestamp(s).get )
             case i : Instant => Some(i)
             case _           => None
     type Converter[T] = Any => Option[T]
