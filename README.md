@@ -6,45 +6,143 @@ static, semi-static, or dynamic).
 
 ## Getting Started
 
-### 1. Set-up an _untemplate_ project
+### 1. Set-up a simple project
 
-An _unstatic_ project begins as an _untemplate_ project.
-Let's [get that started](https://github.com/swaldman/untemplate-doc#quickstart)!
+We'll use a [giter8](https://github.com/foundweekends/giter8) template.
+Any giter8-compatible tool would work (`g8`, `mill init`, `sbt new`). 
 
 ```zsh
-% sbt new swaldman/untemplate-seed.g8
+% sbt new swaldman/unstatic-seed.g8
+[info] welcome to sbt 1.8.2 (Oracle Corporation Java 17.0.5)
+[info] loading settings for project global-plugins from dependency-graph.sbt,gpg.sbt,metals.sbt ...
+[info] loading global plugins from /Users/swaldman/.sbt/1.0/plugins
+[info] set current project to new (in build file:/private/var/folders/by/35mx6ty94jng67n4kh2ps9tc0000gn/T/sbt_898e9db1/new/)
+name [Unstatic Example]: mysite.com
+module [mysite.com]: mysite
+package [example]: com.mysite
+untemplate_version [0.0.4]: 
+mill_version [0.10.11]: 
+
+Template applied in /Users/swaldman/mysite.com
 ```
 
-Edit the resulting `build.sc` file to include `unstatic` dependencies.
+### 2. Check out default site in development mode
 
-`unstatic` is divided into a library of base utilities, and the current implementation
-in terms of [zio](zio.dev) and [tapir](https://tapir.softwaremill.com/).
-So you'll want two dependencies.
+Start the development server:
 
-I like to define my dependencies in [mill] projects as constants in a top-level
-object called `Dependency`. _(You can organize this stuff however you like!)_
-I place something like this above the module definition in `build.sc`:
+```zsh
+% cd mysite.com
+% ./mysite-site-devcycle.sh 
+Compiling /Users/swaldman/Dropbox/BaseFolders/development-why/gitproj/mysite.com/buildCompilationSettings.sc
+Compiling /Users/swaldman/Dropbox/BaseFolders/development-why/gitproj/mysite.com/build.sc
+[38/53] mysite.compile 
+[info] compiling 3 Scala sources to /Users/swaldman/Dropbox/BaseFolders/development-why/gitproj/mysite.com/out/mysite/compile.dest/classes ...
+[info] done compiling
+[53/53] mysite.runBackground 
+Watching for changes to 6 paths... (Enter to re-run, Ctrl-C to exit)
+Endpoints to serve:
+  - GET / -> -/status code (301) {header Location: /index.html}
+  - GET /index.html -> {body as text/plain (UTF-8)}/{header Content-Type: text/html; charset=UTF-8} {body as text/html (UTF-8)}
+  - GET /* {header If-None-Match} {header If-Modified-Since} {header Range} {header Accept-Encoding} -> one of(status code (404)|status code (400)|status code (416))/one of(status code (304)|status code (206) {header Last-Modified} {header Content-Length} {header Content-Type} {header ETag} {header Accept-Ranges} {header Content-Range} {body as application/octet-stream}|status code (200) {header Last-Modified} {header Content-Length} {header Content-Type} {header ETag} {header Content-Encoding} {body as application/octet-stream})
+Beginning HTTP Service on port 8999.
+```
+
+Then, open a browser on `http://localhost:8999/`
+
+You should see a "Hello World!" site!
+
+### 3. Generate as a static site
+
+Run...
+
+```zsh
+% ./mysite-site-gen.sh 
+[52/52] mysite.run 
+Endpoints generated:
+ ➣ /index.html
+Endpoints copied from static locations:
+ ➣ / <- mysite/static
+```
+
+You will see a directory called `public` appear in your directory.
+That is your static site! Open a browser on a file URL to `index.html` in that directory.
+On a Mac...
+
+```zsh
+% open public/index.html
+```
+
+You should see exactly the site you saw from the development server!
+
+### 4. Edit the site
+
+The default site definition is a Scala object, which you'll find at `mysite/src/com/mysite/MysiteSite.scala`:
 
 ```scala
-val UnstaticVersion = "0.0.4"
+package com.mysite
 
-object Dependency {
-  val Unstatic             = ivy"com.mchange::unstatic:${UnstaticVersion}"
-  val UnstaticZTapir       = ivy"com.mchange::unstatic-ztapir:${UnstaticVersion}"
-}
+import ... // imports removed for brevity
+
+object MysiteSite extends ZTSite.SingleRootComposite( JPath.of("mysite/static") ):
+
+  // edit this to where your site will actually be served!
+  override val serverUrl : Abs    = Abs("https://www.example.com/")
+  override val basePath  : Rooted = Rooted.root
+
+  // customize this to what the layout you want requires!
+  case class MainLayoutInput( renderLocation : SiteLocation, mbTitle : Option[String], mainContentHtml : String )
+
+  // get rid of this -- modify it into something useful and/or include something like a SimpleBlog defined as a singleton object
+  object HelloWorldPage extends ZTEndpointBinding.Source:
+    val location = MysiteSite.location("/index.html")
+    val task = zio.ZIO.attempt {
+      layout_main_html( MainLayoutInput( location, Some("Hello"),  "<h1>Hello World!</h1>" ) ).text
+    }
+    val endpointBindings = ZTEndpointBinding.publicReadOnlyHtml( location, task, None, immutable.Set("hello-world") ) :: Nil
+  end HelloWorldPage
+
+  // avoid conflicts, but early items in the lists take precedence over later items
+  override val endpointBindingSources : immutable.Seq[ZTEndpointBinding.Source] = immutable.Seq( HelloWorldPage )
+
+object MysiteSiteGenerator extends ZTMain(MysiteSite, "mysite-site")
 ```
 
-Then, inside the module definition, I override mill's `ivyDeps` task:
+Each element of `endpointBindingSources` defines a `Seq` of pages that will be generated as `endpointBindings`.
+A factory method of [`ZTEndpointBinding.scala`](https://github.com/swaldman/unstatic/blob/main/unstatic/ztapir/src/unstatic/ztapir/ZTEndpointBinding.scala)
+specify the location, relative to site root (which need not be the server root, you can alter `basePath`), a ZIO `Task` that generates the contents.
+Each binding gets a set of identifiers, which become IDs by which you can identify the endpoint (e.g. for links) if they are kept unique.
 
-```scala
-  override def ivyDeps = T {
-    super.ivyDeps() ++
-      Agg (
-        Dependency.Unstatic,
-        Dependency.UnstaticZTapir,
-      )
-  }
-```
+The HTML is generated by an [untemplate](https://github.com/swaldman/untemplate-doc), which is a text-file-ish shorthand for
+generating a top-level Scala function. Unlike most template libraries that try to be an abstraction above programming languages,
+an _untemplate_ really is transparently just a specialized way to write scala. You might see a lot of Scala in them!
+
+The untemplate function invoked to generate the default site is available as `mysite/untemplate/com/mysite/layout-main.html.untemplate`.
+
+Here are some things to try:
+
+1. Restart the development server and check out the site at `http://localhost:8999/`.
+   ```zsh
+   % ./mysite-site-devcycle.sh
+   ```
+2. Edit something!
+   - Change the title from `Some("Hello")` to something else
+   - Edit the HTML in `mysite/untemplate/com/mysite/layout-main.html.untemplate`
+   - Edit the CSS in `mysite/static/css/style.css` (which is linked in the untemplate in a way that self-relativizes from any location in the site)
+   After you make any change, you should be able to reload the page and see the changes.
+   (For the CSS, you may need to `<shift>`-reload or whatever trick is necessary in your browser to skip the cache.)
+   
+   It may take a few seconds. If it does not reload, the changes &mdash; either to the Scala object or
+   to the untemplate &mdash; may not have compiled!
+   Check the command line in which you ran `./mysite-site-devcycle.sh`, and look for compilation errors to correct!
+
+### 5. Add a blog
+
+Coming soon!
+
+(If you're impatient, check out the source for [`drafts.interfluidity.com`](https://github.com/swaldman/drafts.interfluidity.com).)
+
+
+
 
 
 
