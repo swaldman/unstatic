@@ -176,6 +176,9 @@ trait SimpleBlog extends ZTBlog:
   private val DefaultRssFeedIdentifiers = immutable.Set("blogRssFeed")
 
   // you can override this
+  def defaultAuthors : immutable.Seq[String] = Nil
+
+  // you can override this
   def rssFeedIdentifiers = DefaultRssFeedIdentifiers
 
   /**
@@ -189,7 +192,7 @@ trait SimpleBlog extends ZTBlog:
     import Attribute.Key
 
     val mbTitle     = Key.`Title`.caseInsensitiveCheck(template)
-    val authors     = Key.`Author`.caseInsensitiveCheck(template).getOrElse(Nil)
+    val authors     = Key.`Author`.caseInsensitiveCheck(template).getOrElse(defaultAuthors)
     val tags        = Key.`Tag`.caseInsensitiveCheck(template).getOrElse(Nil)
     val pubDate     = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
     val contentType = normalizeContentType( findContentType( template ) )
