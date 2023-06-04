@@ -28,8 +28,8 @@ def normalizeContentType( contentType : String ) =
 def missingAttribute( ut : untemplate.Untemplate[?,?], key : Attribute.Key[?] ) : unstatic.MissingAttribute =
   new MissingAttribute(s"${ut} is missing required attribute '${key}'.")
 
-def parseTimestamp(timestamp: String): Try[Instant] =
-  parseTimestampIsoInstant(timestamp) orElse parseTimestampFromIsoLocalDate(timestamp)
+def parseTimestamp(timestamp: String, timeZone : ZoneId = ZoneId.systemDefault()): Try[Instant] =
+  parseTimestampIsoInstant(timestamp) orElse parseTimestampFromIsoLocalDate(timestamp, timeZone)
 
 def contentTypeFromSuffix( name : String ) : Option[String] =
   val suffixDelimiter = name.lastIndexOf("_")
@@ -61,11 +61,11 @@ private def parseTimestampIsoInstant(timestamp: String): Try[Instant] =
   yield
     Instant.from(temporalAccessor)
 
-private def parseTimestampFromIsoLocalDate(timestamp: String): Try[Instant] =
+private def parseTimestampFromIsoLocalDate(timestamp: String, timeZone : ZoneId = ZoneId.systemDefault()): Try[Instant] =
   for
     temporalAccessor <- Try(ISO_LOCAL_DATE.parse(timestamp))
     ld <- Try(LocalDate.from(temporalAccessor))
-    zdt <- Try(ld.atTime(12, 0).atZone(ZoneId.systemDefault()))
+    zdt <- Try(ld.atTime(12, 0).atZone(timeZone))
   yield
     Instant.from(zdt)
 

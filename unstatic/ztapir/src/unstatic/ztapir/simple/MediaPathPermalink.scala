@@ -34,14 +34,14 @@ object MediaPathPermalink:
     val mediaPath = Rooted.parseAndRoot(dirSitePath)
     MediaPathPermalink( mediaPath, mediaPath.resolve("index.html") )
 
-  def yearMonthDayNameDir( ut : AnyUntemplate ) : MediaPathPermalink =
+  def yearMonthDayNameDir( timeZone : ZoneId )( ut : AnyUntemplate ) : MediaPathPermalink =
     val pubDate = Key.`PubDate`.caseInsensitiveCheck(ut).getOrElse {
       throw missingAttribute(ut, Key.`PubDate`)
     }
     val linkName =
       (Key.`LinkName`.caseInsensitiveCheck(ut) orElse Key.`Title`.caseInsensitiveCheck(ut).map(linkableTitle)).getOrElse(ut.UntemplateName)
     ensureNoFilePathChars(linkName)
-    yearMonthDayNameDir(pubDate, linkName)
+    yearMonthDayNameDir(pubDate, linkName, timeZone)
 
   def givenPermalinkInMediaDirOrElse( backstop : Source ) : Source = { ut =>
     mbGivenPermalinkInMediaDir(ut).getOrElse( backstop(ut) )
@@ -58,8 +58,8 @@ object MediaPathPermalink:
   def givenMediaDirAndPermalink(mediaDirSiteRooted : String, permalinkSiteRooted: String): MediaPathPermalink =
     MediaPathPermalink(Rooted.parseAndRoot(mediaDirSiteRooted), Rooted.parseAndRoot(permalinkSiteRooted))
 
-  private def yearMonthDayNameDir(pubDate : Instant, computedLinkName : String ) : MediaPathPermalink =
-    val zoned = pubDate.atZone(ZoneId.systemDefault())
+  private def yearMonthDayNameDir(pubDate : Instant, computedLinkName : String, timeZone : ZoneId = ZoneId.systemDefault()) : MediaPathPermalink =
+    val zoned = pubDate.atZone(timeZone)
     val year  = zoned.get(ChronoField.YEAR)
     val month = zoned.get(ChronoField.MONTH_OF_YEAR)
     val day   = zoned.get(ChronoField.DAY_OF_MONTH)

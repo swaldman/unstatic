@@ -14,8 +14,12 @@ object SimpleBlog:
     val defaultMarkdown : Htmlifier = (s : String, opts : Options) => Flexmark.defaultMarkdownToHtml(s, opts.generatorFullyQualifiedName )
     case class Options( generatorFullyQualifiedName : Option[String] )
   type Htmlifier = Function2[String,Htmlifier.Options,String]
+end SimpleBlog
+
 trait SimpleBlog extends ZTBlog:
+
   import SimpleBlog.Htmlifier
+  
   object Entry:
     val Presentation  = Blog.EntryPresentation
     type Presentation = Blog.EntryPresentation
@@ -38,12 +42,16 @@ trait SimpleBlog extends ZTBlog:
     ):
       def entryById( id : String ) : EntryResolved = SimpleBlog.this.entryById(id)
   end Entry
+  
   object Layout:
     object Input:
       case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, info : EntryInfo, sourceEntry : EntryResolved, previousEntry : Option[EntryResolved], nextEntry : Option[EntryResolved], presentation : SimpleBlog.this.Entry.Presentation )
       case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String, sourceEntries : immutable.Seq[EntryResolved] )
     end Input
   end Layout
+
+  // you can override this
+  val timeZone: ZoneId = ZoneId.systemDefault()
 
   // you can override this
   val defaultSummaryAsDescriptionMaxLen = 500
@@ -74,7 +82,7 @@ trait SimpleBlog extends ZTBlog:
         comments = None,
         enclosure = None,
         guid = Some(Element.Guid(isPermalink = true, absPermalink.toString)),
-        pubDate = Some(Element.PubDate( entryInfo.pubDate.atZone(ZoneId.systemDefault()))),
+        pubDate = Some(Element.PubDate(entryInfo.pubDate.atZone(timeZone))),
         source = None
       )
     if fullContent then standardItem.withExtra(Element.Content.Encoded(absolutizedHtml)) else standardItem
@@ -87,7 +95,7 @@ trait SimpleBlog extends ZTBlog:
       linkUrl            = frontPage.absolutePath.toString,
       description        = feedDescription,
       language           = Some(language),
-      lastBuildDate      = Some(ZonedDateTime.now),
+      lastBuildDate      = Some(ZonedDateTime.now(timeZone)),
       generator          = Some("https://github.com/swaldman/unstatic"),
     )
 
