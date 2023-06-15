@@ -58,6 +58,9 @@ object MediaPathPermalink:
   def givenMediaDirAndPermalink(mediaDirSiteRooted : String, permalinkSiteRooted: String): MediaPathPermalink =
     MediaPathPermalink(Rooted.parseAndRoot(mediaDirSiteRooted), Rooted.parseAndRoot(permalinkSiteRooted))
 
+  def beneathPrefix( prefixSiteRooted : Rooted )( source : Source ) : Source = ut =>
+    MediaPathPermalink( prefixSiteRooted.embedRoot(source(ut).mediaPathSiteRooted), prefixSiteRooted.embedRoot(source(ut).permalinkSiteRooted) )
+
   private def yearMonthDayNameDir(pubDate : Instant, computedLinkName : String, timeZone : ZoneId = ZoneId.systemDefault()) : MediaPathPermalink =
     val zoned = pubDate.atZone(timeZone)
     val year  = zoned.get(ChronoField.YEAR)
