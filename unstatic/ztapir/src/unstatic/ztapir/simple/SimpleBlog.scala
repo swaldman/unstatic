@@ -262,12 +262,19 @@ trait SimpleBlog extends ZTBlog:
     val layoutPageInput = Layout.Input.Page(this, site, renderLocation, entry, immutable.Seq(resolved))
     layoutPage( layoutPageInput )
 
+  // you can override this
+  def renderMultiplePrologue : String = ""
+
+  // you can override this
+  def renderMultipleEpilogue : String = ""
+
   def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String =
     // println("renderMultiple(...)")
     // resolveds.foreach( r => println(s"${r.entryUntemplate} -- ${r.entryInfo.pubDate}") )
     val fragmentTexts = resolveds.map(resolved => renderSingleFragment(renderLocation, resolved, Entry.Presentation.Multiple))
     val unifiedFragmentTexts = fragmentTexts.mkString(entrySeparator)
-    val layoutPageInput = Layout.Input.Page(this, site, renderLocation, unifiedFragmentTexts, resolveds)
+    val fullText = renderMultiplePrologue + unifiedFragmentTexts + renderMultipleEpilogue
+    val layoutPageInput = Layout.Input.Page(this, site, renderLocation, fullText, resolveds)
     layoutPage( layoutPageInput )
 
   def renderRange(renderLocation: SiteLocation, from: Instant, until: Instant): String =
