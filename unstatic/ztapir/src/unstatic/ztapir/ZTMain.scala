@@ -6,7 +6,7 @@ import sttp.tapir.ztapir.*
 import sttp.tapir.server.interceptor.log.DefaultServerLog
 import sttp.tapir.server.ziohttp.{ZioHttpInterpreter, ZioHttpServerOptions}
 import zio.http.{Http, HttpApp, Request, Response}
-import zio.http.{Server, ServerConfig}
+import zio.http.Server
 import zio.*
 
 import unstatic.*, UrlPath.*
@@ -142,12 +142,12 @@ object ZTMain:
 
       enrichedEndpoints.tail.foldLeft(toHttp(enrichedEndpoints.head))((accum, next) => accum ++ toHttp(next))
 
-    val configLayer = ServerConfig.live(ServerConfig.default.port(cfg.port))
+    val configLayer = ZLayer.succeed(Server.Config.default.port(cfg.port))
     val server =
       for
         app <- ZIO.attempt(buildApp(site))
         _   <- Console.printLineError(s"Beginning HTTP Service on port ${cfg.port}.")
-        svr <- Server.serve(app)
+        svr <- Server.serve(app.withDefaultErrorResponse)
       yield svr
     server.provide(configLayer, Server.live)
 
