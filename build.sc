@@ -4,10 +4,10 @@ import mill.scalalib.publish._
 import mill.define.Target
 
 trait UnstaticBuildModule extends ScalaModule with PublishModule {
-  val UnstaticVersion   = "0.0.7-SNAPSHOT"
+  val UnstaticVersion   = "0.0.7"
 
   object Dependency {
-    val UntemplateVersion = "0.0.5-SNAPSHOT"
+    val UntemplateVersion = "0.0.5"
     val TapirVersion      = "1.2.6"
     val MillVersion       = "0.10.10"
     val FlexmarkVersion   = "0.64.0"
