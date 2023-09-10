@@ -47,6 +47,12 @@ object ZTEndpointBinding:
   def publicReadOnlyRss(siteLocation: ZTSite#SiteLocation, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String] ): ZTEndpointBinding.BytesGenerable =
     publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task, identifiers)
 
+  def publicReadOnlyCss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.BytesGenerable =
+    BytesGenerable( siteRootedPath, publicReadOnlyUtf8CssEndpoint( siteRootedPath, site, task ), task, MediaType.TextCss, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
+
+  def publicReadOnlyCss(siteLocation: ZTSite#SiteLocation, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String] ): ZTEndpointBinding.BytesGenerable =
+    publicReadOnlyCss(siteLocation.siteRootedPath, siteLocation.site, task, identifiers)
+
   def generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O], identifiers : immutable.Set[String]) : ZTEndpointBinding.Generic[I,O] =
     Generic(siteRootedPath, ztServerEndpoint, coreLogic, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 

@@ -84,12 +84,18 @@ private def publicReadOnlyUtf8HtmlEndpoint( siteRootedPath: Rooted, site : Site,
       .out(htmlBodyUtf8)
   endpoint.zServerLogic( _ => errMapped(task) )
 
-// XXX: should I modify this to output immutable.ArraySeq[Byte]?
+private def publicReadOnlyUtf8CssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
+  publicReadOnlyUtf8Endpoint( MediaType.TextCss )( siteRootedPath, site, task )
+
 private def publicReadOnlyUtf8RssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
+  publicReadOnlyUtf8Endpoint( MediaTypeRss )( siteRootedPath, site, task )
+
+// XXX: should I modify this to output immutable.ArraySeq[Byte]?
+private def publicReadOnlyUtf8Endpoint( mediaType : MediaType )( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
       .errorOut(stringBody(CharsetUTF8))
-      .out(header(Header.contentType(MediaTypeRss)))
+      .out(header(Header.contentType(mediaType)))
       .out(byteArrayBody)
   endpoint.zServerLogic( _ => errMapped(task.map(_.toArray)) )
 
