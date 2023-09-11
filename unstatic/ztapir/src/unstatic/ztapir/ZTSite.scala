@@ -51,12 +51,14 @@ trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers
   val disableAllResolveHashSpecials = false
 
   def publicReadOnlyHtml(siteLocation: SiteLocation, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String], resolveHashSpecials : Boolean, memoize : Boolean ) : ZTEndpointBinding =
+    publicReadOnlyHtml(siteLocation.siteRootedPath, task, mediaDirSiteRooted, identifiers, resolveHashSpecials, memoize )
+
+  def publicReadOnlyHtml(siteRootedLocation: Rooted, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String], resolveHashSpecials : Boolean, memoize : Boolean ) : ZTEndpointBinding =
     def resolvingTask : zio.Task[String] =
-      val sourceSiteRooted = siteLocation.siteRootedPath
-      task.map( rawHtml => htmlResolveHashSpecials(sourceSiteRooted.toString(), siteLocation.siteRootedPath, rawHtml, mediaDirSiteRooted, true ) )
+      task.map( rawHtml => htmlResolveHashSpecials(siteRootedLocation.toString(), siteRootedLocation, rawHtml, mediaDirSiteRooted, true ) )
     val base        : zio.Task[String] = if resolveHashSpecials then resolvingTask else task
     val mbMemoizing : zio.Task[String] = if memoize then base.memoize.flatten else base
-    ZTEndpointBinding.publicReadOnlyHtml(siteLocation, mbMemoizing, mediaDirSiteRooted, identifiers )
+    ZTEndpointBinding.publicReadOnlyHtml(siteRootedLocation, this, mbMemoizing, mediaDirSiteRooted, identifiers )
 
   def htmlResolveHashSpecials( sourceId : String, sourceSiteRooted : Rooted, unresolvedHtml : String, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : String =
     if disableAllResolveHashSpecials then
