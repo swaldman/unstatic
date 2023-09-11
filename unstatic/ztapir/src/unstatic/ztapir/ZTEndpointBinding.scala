@@ -1,5 +1,6 @@
 package unstatic.ztapir
 
+import java.net.URL
 import scala.collection.*
 import java.nio.file.Path as JPath
 import java.nio.charset.Charset
@@ -35,23 +36,30 @@ object ZTEndpointBinding:
   def staticFileServing(siteLocation: ZTSite#SiteLocation, file: JPath, identifiers : immutable.Set[String] ): ZTEndpointBinding.FromStaticFile =
     staticFileServing(siteLocation.siteRootedPath, siteLocation.site, file, identifiers)
 
+  def imageProxying( siteRootedPath : Rooted, site : ZTSite, url : URL, identifiers : immutable.Set[String]) : ZTEndpointBinding.BytesGenerable =
+    val (mediaType, ztServerEndpoint, task ) = imageProxyingMediaTypeServerEndpointAndTask( siteRootedPath: Rooted, site : Site, url : URL )
+    BytesGenerable( siteRootedPath, ztServerEndpoint, task, mediaType, immutable.SortedSet.from(identifiers)(using IdentifierOrdering) )
+
+  def imageProxying( siteLocation :  ZTSite#SiteLocation, site : ZTSite, url : URL, identifiers : immutable.Set[String]) : ZTEndpointBinding.BytesGenerable =
+    imageProxying(siteLocation.siteRootedPath, site, url, identifiers)
+
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.StringGenerable =
     StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, mediaDirSiteRooted, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def publicReadOnlyHtml(siteLocation: ZTSite#SiteLocation, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String] ): ZTEndpointBinding.StringGenerable =
     publicReadOnlyHtml(siteLocation.siteRootedPath, siteLocation.site, task, mediaDirSiteRooted, identifiers)
 
+  def publicReadOnlyCss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.StringGenerable =
+    StringGenerable( siteRootedPath, publicReadOnlyUtf8CssEndpoint( siteRootedPath, site, task ), task, mediaDirSiteRooted, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
+
+  def publicReadOnlyCss(siteLocation: ZTSite#SiteLocation, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String] ): ZTEndpointBinding.StringGenerable =
+    publicReadOnlyCss(siteLocation.siteRootedPath, siteLocation.site, task, mediaDirSiteRooted, identifiers)
+
   def publicReadOnlyRss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.BytesGenerable =
-    BytesGenerable( siteRootedPath, publicReadOnlyUtf8RssEndpoint( siteRootedPath, site, task ), task, MediaTypeRss, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
+    BytesGenerable( siteRootedPath, publicReadOnlyUtf8RssEndpointFromBytes( siteRootedPath, site, task ), task, MediaTypeRss, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def publicReadOnlyRss(siteLocation: ZTSite#SiteLocation, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String] ): ZTEndpointBinding.BytesGenerable =
     publicReadOnlyRss(siteLocation.siteRootedPath, siteLocation.site, task, identifiers)
-
-  def publicReadOnlyCss( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.BytesGenerable =
-    BytesGenerable( siteRootedPath, publicReadOnlyUtf8CssEndpoint( siteRootedPath, site, task ), task, MediaType.TextCss, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
-
-  def publicReadOnlyCss(siteLocation: ZTSite#SiteLocation, task: zio.Task[immutable.ArraySeq[Byte]], identifiers : immutable.Set[String] ): ZTEndpointBinding.BytesGenerable =
-    publicReadOnlyCss(siteLocation.siteRootedPath, siteLocation.site, task, identifiers)
 
   def generic[I,O](siteRootedPath : Rooted, ztServerEndpoint : ZTServerEndpoint, coreLogic : I => Task[O], identifiers : immutable.Set[String]) : ZTEndpointBinding.Generic[I,O] =
     Generic(siteRootedPath, ztServerEndpoint, coreLogic, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))

@@ -1,6 +1,7 @@
 package unstatic.ztapir
 
 import scala.collection.*
+import scala.util.Using
 import sttp.tapir.ztapir.*
 import sttp.tapir.{Endpoint, EndpointIO, EndpointInput, EndpointOutput}
 import sttp.tapir.internal.RichEndpoint
@@ -12,6 +13,8 @@ import unstatic.*
 import unstatic.UrlPath.*
 import zio.*
 
+import java.io.ByteArrayOutputStream
+import java.net.URL
 import java.nio.file.Path as JPath
 
 type ZTServerEndpoint = ZServerEndpoint[Any,Any] //ServerEndpoint[Any,[t] =>> ZIO[Any,String,t]]
@@ -84,13 +87,45 @@ private def publicReadOnlyUtf8HtmlEndpoint( siteRootedPath: Rooted, site : Site,
       .out(htmlBodyUtf8)
   endpoint.zServerLogic( _ => errMapped(task) )
 
-private def publicReadOnlyUtf8CssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
-  publicReadOnlyUtf8Endpoint( MediaType.TextCss )( siteRootedPath, site, task )
+private def publicReadOnlyUtf8CssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[String] ) : ZTServerEndpoint =
+  publicReadOnlyUtf8Endpoint( MediaType.TextCss )( siteRootedPath, site, task.map( s => immutable.ArraySeq.unsafeWrapArray(s.getBytes(CharsetUTF8))) )
 
-private def publicReadOnlyUtf8RssEndpoint( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
+private def publicReadOnlyUtf8RssEndpointFromBytes( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
   publicReadOnlyUtf8Endpoint( MediaTypeRss )( siteRootedPath, site, task )
 
-// XXX: should I modify this to output immutable.ArraySeq[Byte]?
+private def imageProxyingMediaTypeServerEndpointAndTask( siteRootedPath: Rooted, site : Site, url : URL ) : ( MediaType, ZTServerEndpoint, Task[immutable.ArraySeq[Byte]] ) =
+  val mediaType = {
+    val urlStr = url.toString()
+    if urlStr.endsWith(".jpg") || urlStr.endsWith(".jpeg") then
+      MediaType.ImageJpeg
+    else if urlStr.endsWith(".png") then
+      MediaType.ImagePng
+    else if urlStr.endsWith(".gif") then
+      MediaType.ImageGif
+    else if urlStr.endsWith(".tif") || urlStr.endsWith(".tiff") then
+      MediaType.ImageTiff
+    else
+      throw new CantGuessImageType(s"'${urlStr}' does not have a suffix of a supported media type.")
+  }
+  val endpoint =
+    endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
+      .errorOut(stringBody(CharsetUTF8))
+      .out(header(Header.contentType(mediaType)))
+      .out(byteArrayBody)
+  val task = ZIO.attempt {
+    import java.io.*
+    val baos = new ByteArrayOutputStream()
+    Using.resource(url.openStream()) { is =>
+      val bis = new BufferedInputStream( is )
+      var b : Int = bis.read()
+      while (b >= 0) {
+        baos.write(b)
+      }
+    }
+    immutable.ArraySeq.unsafeWrapArray(baos.toByteArray)
+  }
+  ( mediaType, endpoint.zServerLogic( _ => errMapped(task.map(_.toArray)) ), task )
+
 private def publicReadOnlyUtf8Endpoint( mediaType : MediaType )( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
   val endpoint =
     endpointForFixedPath( site.serverRootedPath(siteRootedPath) )
