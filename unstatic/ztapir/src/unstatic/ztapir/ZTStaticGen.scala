@@ -6,7 +6,7 @@ import java.nio.file.{Files, StandardCopyOption, Path as JPath}
 import unstatic.*
 import unstatic.UrlPath.*
 
-private object ZTStaticGen:
+object ZTStaticGen:
   case class Result( generated : immutable.Seq[Rooted], copied : immutable.Seq[Tuple2[Rooted,JPath]], ignored : immutable.Seq[Rooted], ungenerable : immutable.Seq[Rooted])
 
   private type IgnoredFiles = immutable.Seq[JPath]
