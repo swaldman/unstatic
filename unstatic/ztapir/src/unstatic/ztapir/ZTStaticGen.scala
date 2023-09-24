@@ -81,7 +81,9 @@ object ZTStaticGen:
   def generate(
     endpointBindings        : immutable.Seq[ZTEndpointBinding],
     genSiteRootDir          : JPath,
-    ignorePrefixes          : immutable.Seq[Rooted] = Nil
+    ignorePrefixes          : immutable.Seq[Rooted] = Nil,
+    permitFileSystemSources : Boolean = true,
+    skipUngenerableBindings : Boolean = false
   ) : Task[Result] =
     scribe.trace("generate(...)")
 
@@ -110,11 +112,24 @@ object ZTStaticGen:
     // println(s"unignoredLocationBindings: " + unignoredLocationBindings.mkString(", "))
 
     val noExceptionNoIgnoredFilesResult =
-      val generated             = generableEndpointBindings.map( _.siteRootedPath )
-      val copied                = locationBindings.map(lb => (lb.siteRootedPath,lb.source))
-      val ignoredForGeneration  = ignoredEndpointBindings.map( _.siteRootedPath )
-      val ungenerable           = ungenerableEndpointBindings.map( _.siteRootedPath )
+      val (copied, ungenerable) =
+        if permitFileSystemSources then
+          val c = locationBindings.map(lb => (lb.siteRootedPath,lb.source))
+          val u = ungenerableEndpointBindings.map( _.siteRootedPath )
+          (c,u)
+        else
+          val c = Nil
+          val u = (locationBindings ++ ungenerableEndpointBindings).map( _.siteRootedPath )
+          (c,u)
+      val generated = generableEndpointBindings.map( _.siteRootedPath )
+      val ignoredForGeneration = ignoredEndpointBindings.map( _.siteRootedPath )
       Result( generated, copied, ignoredForGeneration, ungenerable )
+
+    if !skipUngenerableBindings && noExceptionNoIgnoredFilesResult.ungenerable.nonEmpty then
+      val ung = noExceptionNoIgnoredFilesResult.ungenerable.mkString(", ")
+      val msg =
+        "Ungenerable bindings: ${ung}" + (if !permitFileSystemSources then " Note that file-system sources have been disabled." else "")
+      throw new IncludesUngenerableBindings(msg)
 
     def findDestPathFor(siteRootedPath: Rooted) = ZIO.attempt {
       if siteRootedPath == Rooted.root then
@@ -170,14 +185,26 @@ object ZTStaticGen:
       }
       ZIO.foreachDiscard(tasks)(identity)
 
-    for
-      ignoredPaths <- locationsTask
-      _            <- generablesTask
-    yield
-      val newIgnored = ignoredPaths.map(jp => Rooted.parseAndRoot(jp.toString()))
-      noExceptionNoIgnoredFilesResult.copy(ignored = noExceptionNoIgnoredFilesResult.ignored ++ newIgnored)
+    val out =
+      if permitFileSystemSources then
+        for
+          ignoredPaths <- locationsTask
+          _            <- generablesTask
+        yield
+          val newIgnored = ignoredPaths.map(jp => Rooted.parseAndRoot(jp.toString()))
+          noExceptionNoIgnoredFilesResult.copy(ignored = noExceptionNoIgnoredFilesResult.ignored ++ newIgnored)
+      else
+        generablesTask *> ZIO.succeed( noExceptionNoIgnoredFilesResult )
 
-  def generateZTSite( site : ZTSite, genSiteRootDir: JPath, ignorePrefixes: immutable.Seq[Rooted] = Nil) : Task[Result] =
+    out
+
+  def generateZTSite(
+    site                    : ZTSite,
+    genSiteRootDir          : JPath,
+    ignorePrefixes          : immutable.Seq[Rooted] = Nil,
+    permitFileSystemSources : Boolean = true,
+    skipUngenerableBindings : Boolean = false
+  ) : Task[Result] =
     scribe.trace("generateZTSite(...)")
-    generate( site.endpointBindings, genSiteRootDir, ignorePrefixes )
+    generate( site.endpointBindings, genSiteRootDir, ignorePrefixes, permitFileSystemSources )
 
