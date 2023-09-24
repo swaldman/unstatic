@@ -13,7 +13,7 @@ import unstatic.*
 import unstatic.UrlPath.*
 import zio.*
 
-import java.io.ByteArrayOutputStream
+import java.io.*
 import java.net.URL
 import java.nio.file.Path as JPath
 
@@ -47,7 +47,6 @@ private def inputsForFixedPath( serverRootedPath : Rooted ) : EndpointInput[Unit
 private def errMapped[T]( task : Task[T] ) : zio.ZIO[Any,String,T] =
   // XXX: Should I do something to break harder on non-nonFatal errors?
   task.mapError { t =>
-    import java.io.*
     val sw = new StringWriter()
     t.printStackTrace(new PrintWriter(sw))
     sw.toString()
@@ -93,6 +92,25 @@ private def publicReadOnlyUtf8CssEndpoint( siteRootedPath: Rooted, site : Site, 
 private def publicReadOnlyUtf8RssEndpointFromBytes( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =
   publicReadOnlyUtf8Endpoint( MediaTypeRss )( siteRootedPath, site, task )
 
+private def classLoaderResourceEndpoint( siteRootedPath : Rooted, site : Site, cl : ClassLoader, clPath : String ) : ZTServerEndpoint =
+  val inputs =
+    val serverRootedPath = site.serverRootedPath(siteRootedPath)
+    inputsForFixedPath( serverRootedPath )
+  resourceGetServerEndpoint[Task](inputs)( cl, clPath )
+
+private def arraySeqByteTask( openInputStream : () => InputStream ) : Task[immutable.ArraySeq[Byte]] =
+  ZIO.attempt {
+    val baos = new ByteArrayOutputStream()
+    Using.resource(openInputStream()) { is =>
+      val bis = new BufferedInputStream( is )
+      var b : Int = bis.read()
+      while (b >= 0) {
+        baos.write(b)
+      }
+    }
+    immutable.ArraySeq.unsafeWrapArray(baos.toByteArray)
+  }
+
 private def imageProxyingMediaTypeServerEndpointAndTask( siteRootedPath: Rooted, site : Site, url : URL ) : ( MediaType, ZTServerEndpoint, Task[immutable.ArraySeq[Byte]] ) =
   val mediaType = {
     val urlStr = url.toString()
@@ -112,18 +130,7 @@ private def imageProxyingMediaTypeServerEndpointAndTask( siteRootedPath: Rooted,
       .errorOut(stringBody(CharsetUTF8))
       .out(header(Header.contentType(mediaType)))
       .out(byteArrayBody)
-  val task = ZIO.attempt {
-    import java.io.*
-    val baos = new ByteArrayOutputStream()
-    Using.resource(url.openStream()) { is =>
-      val bis = new BufferedInputStream( is )
-      var b : Int = bis.read()
-      while (b >= 0) {
-        baos.write(b)
-      }
-    }
-    immutable.ArraySeq.unsafeWrapArray(baos.toByteArray)
-  }
+  val task = arraySeqByteTask(() => url.openStream)
   ( mediaType, endpoint.zServerLogic( _ => errMapped(task.map(_.toArray)) ), task )
 
 private def publicReadOnlyUtf8Endpoint( mediaType : MediaType )( siteRootedPath: Rooted, site : Site, task: zio.Task[immutable.ArraySeq[Byte]] ) : ZTServerEndpoint =

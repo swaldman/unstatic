@@ -43,6 +43,14 @@ object ZTEndpointBinding:
   def imageProxying( siteLocation :  ZTSite#SiteLocation, site : ZTSite, url : URL, identifiers : immutable.Set[String]) : ZTEndpointBinding.BytesGenerable =
     imageProxying(siteLocation.siteRootedPath, site, url, identifiers)
 
+  def fromClassLoaderResource( siteRootedPath : Rooted, site : ZTSite, cl : ClassLoader, clPath : String, mimeType : String, identifiers : immutable.Set[String] ) : ZTEndpointBinding.BytesGenerable =
+    val ztServerEndpoint = classLoaderResourceEndpoint( siteRootedPath, site, cl, clPath )
+    val mediaType =
+      MediaType.parse(mimeType) match
+        case Left( message ) => throw new BadMediaType( message )
+        case Right( mt )     => mt
+    BytesGenerable( siteRootedPath, ztServerEndpoint, arraySeqByteTask(() => cl.getResourceAsStream(clPath)), mediaType, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
+
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.StringGenerable =
     StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, mediaDirSiteRooted, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 

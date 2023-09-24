@@ -6,3 +6,5 @@ class UnresolvedReference( val source : String, val reference : String, val expl
 class UnexpectedStaticLocationType(msg : String, cause : Throwable = null) extends UnstaticException(msg,cause)
 class NotYetSupported(msg : String, cause : Throwable = null) extends UnstaticException(msg,cause)
 class CantGuessImageType(msg : String, cause : Throwable = null) extends UnstaticException(msg,cause)
+class IncludesUngenerableBindings(msg : String, cause : Throwable = null) extends UnstaticException(msg,cause)
+class BadMediaType(msg : String, cause : Throwable = null) extends UnstaticException(msg,cause)
