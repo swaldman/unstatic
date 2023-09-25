@@ -101,8 +101,7 @@ private def classLoaderResourceEndpoint( siteRootedPath : Rooted, site : Site, c
 private def arraySeqByteTask( openInputStream : () => InputStream ) : Task[immutable.ArraySeq[Byte]] =
   ZIO.attempt {
     val baos = new ByteArrayOutputStream()
-    Using.resource(openInputStream()) { is =>
-      val bis = new BufferedInputStream( is )
+    Using.resource(new BufferedInputStream(openInputStream())) { bis =>
       var b : Int = bis.read()
       while (b >= 0) {
         baos.write(b)
