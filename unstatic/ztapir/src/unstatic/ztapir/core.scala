@@ -106,6 +106,7 @@ private def arraySeqByteTask( openInputStream : () => InputStream ) : Task[immut
       var b : Int = bis.read()
       while (b >= 0) {
         baos.write(b)
+        b = bis.read()
       }
     }
     immutable.ArraySeq.unsafeWrapArray(baos.toByteArray)
