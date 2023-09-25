@@ -16,7 +16,7 @@ object ZTSite:
   end Composite
 
   trait SingleStaticRootComposite( staticRootDir : JPath ) extends Composite:
-    override val enforceUserContentFrom = Some(staticRootDir)
+    override val enforceUserContentFrom = Some(immutable.Seq(staticRootDir))
 
     private lazy val rootBinding = ZTEndpointBinding.staticDirectoryServing(Rooted.root, this, staticRootDir, immutable.Set("staticRoot"))
     override def endpointBindings : immutable.Seq[ZTEndpointBinding] = super.endpointBindings :+ rootBinding
@@ -25,7 +25,19 @@ object ZTSite:
 trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers:
   override def allBindings : immutable.Seq[AnyBinding] = this.endpointBindings
 
-  val enforceUserContentFrom : Option[JPath]
+  /**
+   *  If Some(...), media-dir hash specials will be expected
+   *  to be found under the given file paths, taken as equivalent to
+   *  site root. media-dir has specials with be checked against this
+   *  list, and an UnresolvedReference will be thrown if not found.
+   *
+   *  If None, then media-dir hash specials will be trusted without any
+   *  check.
+   *
+   *  If Some( immutable.Seq.empty ), then all media-dir hash specials
+   *  will fail as UnresovedReference. Probably don't do that.
+   */
+  val enforceUserContentFrom : Option[immutable.Seq[JPath]]
 
   lazy val siteRootedPathByIdentifier =
     allBindings.reverse.flatMap( b => b.identifiers.toSeq.map(id => (id, b.siteRootedPath)) ).toMap
@@ -102,10 +114,15 @@ trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers
           case Some( mediaDirSiteRooted ) =>
             val relpath = Rel(content.drop(2))
             val destSiteRooted = mediaDirSiteRooted.resolve(relpath)
-            enforceUserContentFrom.foreach { jpath =>
-              val expectedFile = jpath.resolve(destSiteRooted.unroot.toString())
-              if (!Files.exists(expectedFile))
-                throw new UnresolvedReference(sourceId, href, s"For media-dir reference, expected destination file does not exist: '${expectedFile}'", Some(expectedFile.toAbsolutePath.toString))
+            val destSiteUnrootedAsString = destSiteRooted.unroot.toString()
+            enforceUserContentFrom.foreach { seq =>
+              val found = seq.exists { jpath =>
+                val expectedFile = jpath.resolve(destSiteUnrootedAsString)
+                Files.exists(expectedFile)
+              }
+              if (!found)
+                val expectedFiles = seq.map( _.resolve(destSiteUnrootedAsString) ).map( "'" + _ + "'" ).mkString(" or " )
+                throw new UnresolvedReference(sourceId, href, s"For media-dir reference, expected destination file does not exist, expect one of ${expectedFiles}")
             }
             sourceSiteRooted.relativizeSibling(destSiteRooted).toString()
           case None =>

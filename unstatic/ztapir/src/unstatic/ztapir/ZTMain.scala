@@ -184,10 +184,14 @@ object ZTMain:
         Console.printLine("  Static generation and HTTP service.") *>
           sg.mediaDirSiteRooted.fold(ZIO.unit) { mdsr =>
             Console.printLine(s"    media-dir: ${mdsr}") *>
-            site.enforceUserContentFrom.fold(ZIO.unit) { userRoot =>
-              val mediaDir = userRoot.resolve(mdsr.unroot.toString())
-              Console.printLine("    media-dir (absolute): ") *>
-              Console.printLine(s"      ${mediaDir.toAbsolutePath.toString}")
+            site.enforceUserContentFrom.fold(ZIO.unit) { seq =>
+              val mdStr = if seq.size > 1 then "media-dirs" else "media-dir"
+              seq.foldLeft {
+                Console.printLine(s"    ${mdStr} (absolute): ")
+              }{ (accum, next) =>
+                val mediaDir = next.resolve(mdsr.unroot.toString())
+                accum *> Console.printLine(s"      ${mediaDir.toAbsolutePath.toString}")
+              }
             }
           }
       case bg : ZTEndpointBinding.BytesGenerable =>
