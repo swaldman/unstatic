@@ -70,8 +70,18 @@ trait SimpleBlog extends ZTBlog:
       val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
       mutateResolveRelativeUrls(jsoupDoc)
       (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc))
+    val authorsString : Option[String] =
+      entryInfo.authors.length match
+        case 0 => None
+        case 1 => Some( entryInfo.authors.head )
+        case 2 => Some( entryInfo.authors.head + " and " + entryInfo.authors.last )
+        case n =>
+          val anded = entryInfo.authors.init :+ s"and ${entryInfo.authors.last}"
+          Some( anded.mkString(", ") )
     val nospamAuthor =
-      if entryInfo.authors.nonEmpty then s"""nospam@dev.null (${entryInfo.authors.mkString(", ")})""" else "nospam@dev.null"
+      authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})")
+    val mbDcCreatorElem =
+      authorsString.map( as => Element.DublinCore.Creator( as ) )
     val standardItem =
       Element.Item(
         title = Element.Title(resolved.entryInfo.mbTitle.getOrElse("")),
@@ -85,7 +95,8 @@ trait SimpleBlog extends ZTBlog:
         pubDate = Some(Element.PubDate(entryInfo.pubDate.atZone(timeZone))),
         source = None
       )
-    if fullContent then standardItem.withExtra(Element.Content.Encoded(absolutizedHtml)) else standardItem
+    val baseItem = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))  
+    if fullContent then baseItem.withExtra(Element.Content.Encoded(absolutizedHtml)) else baseItem
 
   // you can override this
   // should remain a def as long as we have lastBuildDate though
