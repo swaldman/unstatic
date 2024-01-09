@@ -21,3 +21,11 @@
    - Maybe each post a hashtag, @ to a common user, 
      comments@interfluidity.com?
    - See https://carlschwan.eu/2020/12/29/adding-comments-to-your-static-blog-with-mastodon/
+ - In generating links, consider strint slugs?
+   - https://github.com/slugify/slugify/blob/master/src/main/java/com/github/slugify/Slugify.java
+   - https://glaforge.dev/posts/2024/01/url-slug-or-how-to-remove-accents-in-java/
+   - be sure to
+     1. Define totally distinct linkTitle / link generating functions, leaving the original implementations in place
+     2. Use new link generating functions in new projects
+     3. In old projects, discriminate on untemplate publication date attribute
+        - use old form for pre-update datetimes, new form for post-update datetimes
