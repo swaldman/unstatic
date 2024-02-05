@@ -135,9 +135,18 @@ trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers
         else
           href
       else
-        val id = content
+        val withinPageAnchorIndex = content.indexOf('#')
+        val (id, withinPageAnchor) =
+          if withinPageAnchorIndex < 0 then
+            (content, None)
+          else
+            (content.substring(0,withinPageAnchorIndex), Some(content.substring(withinPageAnchorIndex+1)))
         siteRootedPathByIdentifier.get(id) match
-          case Some(path) => sourceSiteRooted.relativizeSibling(path).toString()
+          case Some(path) =>
+            val unanchored = sourceSiteRooted.relativizeSibling(path).toString()
+            withinPageAnchor match
+              case Some(wpa) => s"${unanchored}#${wpa}"
+              case None      => unanchored
           case None =>
             throw new UnresolvedReference(sourceId, href, s"Refers to identifier '${id}', but that identifier is unknown to this site.")
             // scribe.warn(s"${sourceId}: Special hash reference '${href}' could not be interpreted or resolved to an identifier, left as-is.")
