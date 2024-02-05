@@ -9,9 +9,8 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
   val UnstaticVersion   = "0.2.1-SNAPSHOT"
 
   object Dependency {
-    val UntemplateVersion = "0.1.2-SNAPSHOT"
-    val TapirVersion      = "1.5.1" // last scala 3.2.x version
-    val MillVersion       = "0.11.2"
+    val UntemplateVersion = "0.1.2"
+    val TapirVersion      = "1.9.9" // last scala 3.2.x version
     val FlexmarkVersion   = "0.64.8"
 
     val Untemplate = ivy"com.mchange::untemplate:${UntemplateVersion}" // mill.scalalib.Dep
@@ -37,7 +36,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
     }
   }
 
-  override def scalaVersion = "3.2.2"
+  override def scalaVersion = "3.3.1"
   //override def ammoniteVersion = "2.5.6" // supports Scala 3.2.1
   // override def scalacOptions = T{ Seq("-explain") }
   override def scalacOptions = T{ Seq("-deprecation") }

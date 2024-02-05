@@ -5,7 +5,7 @@ import scala.collection.*
 import sttp.tapir.ztapir.*
 import sttp.tapir.server.interceptor.log.DefaultServerLog
 import sttp.tapir.server.ziohttp.{ZioHttpInterpreter, ZioHttpServerOptions}
-import zio.http.{Http, HttpApp, Request, Response}
+import zio.http.{HttpApp, Request, Response}
 import zio.http.Server
 import zio.*
 
@@ -59,7 +59,7 @@ object ZTMain:
   def interpreterOptions( verbose : Boolean ) = if verbose then VerboseServerInterpreterOptions else DefaltServerInterpreterOptions
 
   def serve(site: ZTSite)(using cfg: Config.Dynamic) =
-    def buildApp(endpointSource: ZTEndpointBinding.Source): HttpApp[Any, Throwable] =
+    def buildApp(endpointSource: ZTEndpointBinding.Source) =
       val endpointBindings = endpointSource.endpointBindings
       //val endpoints = endpointBindings.map(_.ztServerEndpoint)
       if (endpointBindings.isEmpty) throw new NoEndpointsDefined(s"No endpoints defined to serve from site for ${site.sitePath}.")
@@ -138,7 +138,7 @@ object ZTMain:
         scala.Console.err.println("Endpoints to serve:")
         enrichedEndpoints.foreach( zse => scala.Console.err.println( "  - " + zse.show) )
 
-      def toHttp(endpoint: ZTServerEndpoint): Http[Any, Throwable, Request, Response] = ZioHttpInterpreter(interpreterOptions(cfg.verbose)).toHttp(endpoint)
+      def toHttp(endpoint: ZTServerEndpoint) = ZioHttpInterpreter(interpreterOptions(cfg.verbose)).toHttp(endpoint)
 
       enrichedEndpoints.tail.foldLeft(toHttp(enrichedEndpoints.head))((accum, next) => accum ++ toHttp(next))
 
@@ -147,7 +147,7 @@ object ZTMain:
       for
         app <- ZIO.attempt(buildApp(site))
         _   <- Console.printLineError(s"Beginning HTTP Service on port ${cfg.port}.")
-        svr <- Server.serve(app.withDefaultErrorResponse)
+        svr <- Server.serve(app)
       yield svr
     server.provide(configLayer, Server.live)
 
