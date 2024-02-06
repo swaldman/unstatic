@@ -2,6 +2,7 @@ package unstatic.ztapir
 
 import scala.collection.*
 import scala.util.Using
+import sttp.tapir.files.*
 import sttp.tapir.ztapir.*
 import sttp.tapir.{Endpoint, EndpointIO, EndpointInput, EndpointOutput}
 import sttp.tapir.internal.RichEndpoint
@@ -96,7 +97,7 @@ private def classLoaderResourceEndpoint( siteRootedPath : Rooted, site : Site, c
   val inputs =
     val serverRootedPath = site.serverRootedPath(siteRootedPath)
     inputsForFixedPath( serverRootedPath )
-  resourceGetServerEndpoint[Task](inputs)( cl, clPath )
+  staticResourceGetServerEndpoint[Task](inputs)( cl, clPath )
 
 private def arraySeqByteTask( openInputStream : () => InputStream ) : Task[immutable.ArraySeq[Byte]] =
   ZIO.attempt {
@@ -145,7 +146,7 @@ private def staticDirectoryServingEndpoint(siteRootedPath: Rooted, site: Site, d
   val serverRootedPath = site.serverRootedPath(siteRootedPath)
   // see https://tapir.softwaremill.com/en/latest/endpoint/static.html
   val inputs = if serverRootedPath.isRoot then emptyInput else inputsForFixedPath(serverRootedPath)
-  filesGetServerEndpoint[Task](inputs)(dir.toAbsolutePath.toString)
+  staticFilesGetServerEndpoint[Task](inputs)(dir.toAbsolutePath.toString)
 
 private def staticFileServingEndpoint(siteRootedPath: Rooted, site: Site, file: JPath): ZTServerEndpoint =
   val serverRootedPath = site.serverRootedPath(siteRootedPath)
@@ -155,4 +156,4 @@ private def staticFileServingEndpoint(siteRootedPath: Rooted, site: Site, file: 
     else
       scribe.warn(s"A UrlPath marked as a directory (would print with terminal slash) is given as endpoint for single file '${file}'.")
   val inputs = inputsForFixedPath(serverRootedPath) // we know it's not root
-  fileGetServerEndpoint[Task](inputs)(file.toAbsolutePath.toString)
+  staticFileGetServerEndpoint[Task](inputs)(file.toAbsolutePath.toString)
