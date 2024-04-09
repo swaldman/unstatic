@@ -14,12 +14,116 @@ object SimpleBlog:
     val defaultMarkdown : Htmlifier = (s : String, opts : Options) => Flexmark.defaultMarkdownToHtml(s, opts.generatorFullyQualifiedName )
     case class Options( generatorFullyQualifiedName : Option[String] )
   type Htmlifier = Function2[String,Htmlifier.Options,String]
+  object Rss:
+    private def rssSummaryAsDescription(jsoupDocAbsolutized : org.jsoup.nodes.Document, maxLen : Int) : String =
+      val tmp = jsoupDocAbsolutized.text().take(maxLen)
+      val lastSpace = tmp.lastIndexOf(' ')
+      (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
+
+    def rssItem( blog : SimpleBlog )( resolved : blog.EntryResolved, fullContent : Boolean, extraChildren : List[audiofluidity.rss.Element[?]] = Nil, extraChildrenRaw : List[scala.xml.Elem] = Nil) : Element.Item =
+      val entryInfo = resolved.entryInfo
+      val absPermalink = blog.site.absFromSiteRooted(entryInfo.permalinkPathSiteRooted)
+      val permalinkRelativeHtml = blog.renderSingleFragment(blog.SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, blog.Entry.Presentation.Rss)
+      val (absolutizedHtml, summary) =
+        val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
+        mutateResolveRelativeUrls(jsoupDoc)
+        (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc,blog.defaultSummaryAsDescriptionMaxLen))
+      val authorsString : Option[String] =
+        entryInfo.authors.length match
+          case 0 => None
+          case 1 => Some( entryInfo.authors.head )
+          case 2 => Some( entryInfo.authors.head + " and " + entryInfo.authors.last )
+          case n =>
+            val anded = entryInfo.authors.init :+ s"and ${entryInfo.authors.last}"
+            Some( anded.mkString(", ") )
+      val nospamAuthor =
+        authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})")
+      val mbDcCreatorElem =
+        authorsString.map( as => Element.DublinCore.Creator( as ) )
+      val standardItem =
+        Element.Item(
+          title = entryInfo.mbTitle.map( Element.Title.apply(_, Nil, Nil) ),
+          link = Some(Element.Link(absPermalink.toString)),
+          description = Some(Element.Description(summary)),
+          author = Some(Element.Author(nospamAuthor)),
+          categories = Nil,
+          comments = None,
+          enclosure = None,
+          guid = Some(Element.Guid(isPermalink = true, absPermalink.toString)),
+          pubDate = Some(Element.PubDate(entryInfo.pubDate.atZone(blog.timeZone))),
+          source = None
+        )
+      val baseItem = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))  
+      val itemWithoutExtraChildren = if fullContent then baseItem.withExtra(Element.Content.Encoded(absolutizedHtml)) else baseItem
+      itemWithoutExtraChildren.withExtras( extraChildren ).withExtras( extraChildrenRaw )
+
+    def defaultChannelSpecNow( blog : SimpleBlog ) : Element.Channel.Spec =
+      Element.Channel.Spec (
+        title              = blog.feedTitle,
+        linkUrl            = blog.frontPage.absolutePath.toString,
+        description        = blog.feedDescription,
+        language           = Some( blog.language ),
+        lastBuildDate      = Some( ZonedDateTime.now(blog.timeZone) ),
+        generator          = Some( "https://github.com/swaldman/unstatic" ),
+      )
+
+    def atomLinkChannelExtra( blog : SimpleBlog ) : Element.Atom.Link =
+      Element.Atom.Link(
+        href = blog.rssFeed.absolutePath.toString(),
+        rel = Some(Element.Atom.LinkRelation.self),
+        `type` = Some("application/rss+xml")
+      )
+
+    val DefaultRssNamespaces = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
+
+    val DefaultFeedToXmlSpec : Element.ToXml.Spec = Element.ToXml.Spec.Default
+
+    val DefaultRssFeedIdentifiers = immutable.Set("rssFeed")
+
+    def defaultItemable( blog : SimpleBlog ) : Itemable[blog.EntryResolved] =
+      new Itemable[blog.EntryResolved]:
+        extension (resolved : blog.EntryResolved)
+          def toItem : Element.Item = rssItem( blog )(resolved, blog.fullContentFeed)
+
+    def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
+      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved )
+
+    // candidateEntriesResolved are expected to be already reverse-chronological sorted!
+    def makeFeed( blog : SimpleBlog )(
+      itemable                 : Itemable[blog.EntryResolved],
+      maxEntries               : Option[Int],
+      onlySince                : Option[Instant],
+      channelSpec              : Element.Channel.Spec,
+      rssNamespaces            : List[Namespace],
+      candidateEntriesResolved : immutable.SortedSet[blog.EntryResolved],
+      extraChannelChildren     : List[Element[?]]     = Nil,
+      extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
+      extraRssChildren         : List[Element[?]]     = Nil,
+      extraRssChildrenRaw      : List[scala.xml.Elem] = Nil
+    ) : Element.Rss =
+        given Itemable[blog.EntryResolved] = itemable
+        val instantOrdering = summon[Ordering[Instant]]
+        val items =
+          ( maxEntries, onlySince ) match
+            case(Some(max), Some(since)) =>
+              candidateEntriesResolved
+                .filter( resolved => instantOrdering.compare(resolved.entryInfo.sortDate,since) > 0 )
+                .take(max)
+            case (None, Some(since)) =>
+              candidateEntriesResolved.filter( resolved => instantOrdering.compare(resolved.entryInfo.sortDate,since) > 0 )
+            case (Some(max), None) =>
+              candidateEntriesResolved.take(max)
+            case (None,None) =>
+              candidateEntriesResolved
+        val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog) )/*.withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )*/
+        Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
+  end Rss
 end SimpleBlog
 
 trait SimpleBlog extends ZTBlog:
 
   import SimpleBlog.Htmlifier
-  
+
   object Entry:
     val Presentation  = Blog.EntryPresentation
     type Presentation = Blog.EntryPresentation
@@ -31,7 +135,9 @@ trait SimpleBlog extends ZTBlog:
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
-    )
+    ):
+      def sortDate : Instant = pubDate
+    end Info
     final case class Input (
       blog : SimpleBlog,
       site : Site, // duplicative, since it's accessible from SiteLocations. But easy
@@ -56,102 +162,13 @@ trait SimpleBlog extends ZTBlog:
   // you can override this
   val defaultSummaryAsDescriptionMaxLen = 500
 
-  def rssSummaryAsDescription(jsoupDocAbsolutized : org.jsoup.nodes.Document) : String =
-    val tmp = jsoupDocAbsolutized.text().take(defaultSummaryAsDescriptionMaxLen)
-    val lastSpace = tmp.lastIndexOf(' ')
-    (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
-
-  def rssItemForResolved(resolved : EntryResolved, fullContent : Boolean) : Element.Item =
-    val entryInfo = resolved.entryInfo
-    val entryUntemplate = resolved.entryUntemplate
-    val absPermalink = site.absFromSiteRooted(resolved.entryInfo.permalinkPathSiteRooted)
-    val permalinkRelativeHtml = renderSingleFragment(SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, Entry.Presentation.Rss)
-    val (absolutizedHtml, summary) =
-      val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
-      mutateResolveRelativeUrls(jsoupDoc)
-      (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc))
-    val authorsString : Option[String] =
-      entryInfo.authors.length match
-        case 0 => None
-        case 1 => Some( entryInfo.authors.head )
-        case 2 => Some( entryInfo.authors.head + " and " + entryInfo.authors.last )
-        case n =>
-          val anded = entryInfo.authors.init :+ s"and ${entryInfo.authors.last}"
-          Some( anded.mkString(", ") )
-    val nospamAuthor =
-      authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})")
-    val mbDcCreatorElem =
-      authorsString.map( as => Element.DublinCore.Creator( as ) )
-    val standardItem =
-      Element.Item(
-        title = Element.Title(resolved.entryInfo.mbTitle.getOrElse("")),
-        link = Element.Link(absPermalink.toString),
-        description = Element.Description(summary),
-        author = Element.Author(nospamAuthor),
-        categories = Nil,
-        comments = None,
-        enclosure = None,
-        guid = Some(Element.Guid(isPermalink = true, absPermalink.toString)),
-        pubDate = Some(Element.PubDate(entryInfo.pubDate.atZone(timeZone))),
-        source = None
-      )
-    val baseItem = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))  
-    if fullContent then baseItem.withExtra(Element.Content.Encoded(absolutizedHtml)) else baseItem
-
-  // you can override this
-  // should remain a def as long as we have lastBuildDate though
-  def channelSpec =
-    Element.Channel.Spec (
-      title              = feedTitle,
-      linkUrl            = frontPage.absolutePath.toString,
-      description        = feedDescription,
-      language           = Some(language),
-      lastBuildDate      = Some(ZonedDateTime.now(timeZone)),
-      generator          = Some("https://github.com/swaldman/unstatic"),
-    )
-
-  // better be def or lazy!
-  //
-  // if it's a val, it'll blow up trying to fetch the rssFeed SiteLocation before
-  // site has been initialized!
-  def atomLinkChannelExtra =
-    Element.Atom.Link(
-      href = rssFeed.absolutePath.toString(),
-      rel = Some(Element.Atom.LinkRelation.self),
-      `type` = Some("application/rss+xml")
-    )
-
-  def rssNamespaces = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
-
-  def feedToXmlSpec : Element.ToXml.Spec = Element.ToXml.Spec.Default
-
-  def makeFeed( fullContent : Boolean = true ) : Element.Rss =
-    given Itemable[EntryResolved] with
-      extension (resolved : EntryResolved)
-        def toItem : Element.Item = rssItemForResolved(resolved, fullContent)
-
-    val instantOrdering = summon[Ordering[Instant]]
-    val items =
-      ( maxFeedEntries, onlyFeedEntriesSince ) match
-        case(Some(max), Some(since)) =>
-          entriesResolved
-            .filter( resolved => instantOrdering.compare(resolved.entryInfo.pubDate,since) > 0 )
-            .take(max)
-        case (None, Some(since)) =>
-          entriesResolved.filter( resolved => instantOrdering.compare(resolved.entryInfo.pubDate,since) > 0 )
-        case (Some(max), None) =>
-          entriesResolved.take(max)
-        case (None,None) =>
-          entriesResolved
-    val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra )
-    Element.Rss(channel).overNamespaces(rssNamespaces)
-
   // you can override this
   val fullContentFeed = true
 
-  lazy val feed      : Element.Rss              = makeFeed( fullContentFeed )
-  lazy val feedXml   : String                   = feed.asXmlText(feedToXmlSpec)
-  lazy val feedBytes : immutable.ArraySeq[Byte] = immutable.ArraySeq.unsafeWrapArray( feedXml.getBytes(CharsetUTF8) )
+  lazy val feed          : Element.Rss              = SimpleBlog.Rss.makeDefaultFeed( this )
+  lazy val feedToXmlSpec : Element.ToXml.Spec       = SimpleBlog.Rss.DefaultFeedToXmlSpec
+  lazy val feedXml       : String                   = feed.asXmlText(feedToXmlSpec)
+  lazy val feedBytes     : immutable.ArraySeq[Byte] = immutable.ArraySeq.unsafeWrapArray( feedXml.getBytes(CharsetUTF8) )
 
   private val DefaultHtmlifierForContentType = immutable.Map[String,Htmlifier] (
     "text/html"     -> Htmlifier.identity,
@@ -171,7 +188,7 @@ trait SimpleBlog extends ZTBlog:
    * Reverse-chronological!
    */
   given entryOrdering : Ordering[EntryResolved] =
-    Ordering.by( (er : EntryResolved) => (er.entryInfo.pubDate, er.entryUntemplate.UntemplateFullyQualifiedName) ).reverse
+    Ordering.by( (er : EntryResolved) => (er.entryInfo.sortDate, er.entryUntemplate.UntemplateFullyQualifiedName) ).reverse
 
   val site                : Site // the type is Blog.this.Site, narrowed to ZTSite by ZTBlog
   val frontPage           : SiteLocation
@@ -192,13 +209,11 @@ trait SimpleBlog extends ZTBlog:
 
   lazy val rssFeed : SiteLocation = SiteLocation(frontPage.siteRootedPath.resolveSibling("feed.rss") )
 
-  private val DefaultRssFeedIdentifiers = immutable.Set("blogRssFeed")
-
   // you can override this
   def defaultAuthors : immutable.Seq[String] = Nil
 
   // you can override this
-  def rssFeedIdentifiers = DefaultRssFeedIdentifiers
+  def rssFeedIdentifiers = SimpleBlog.Rss.DefaultRssFeedIdentifiers
 
   /**
    * Filter the index of your untemplates for the blog's entries
@@ -290,7 +305,7 @@ trait SimpleBlog extends ZTBlog:
 
   def renderRange(renderLocation: SiteLocation, from: Instant, until: Instant): String =
     val ordering = summon[Ordering[Instant]]
-    val rs = entriesResolved.filter(r => ordering.gteq(from, r.entryInfo.pubDate) && ordering.lt(r.entryInfo.pubDate, until))
+    val rs = entriesResolved.filter(r => ordering.gteq(from, r.entryInfo.sortDate) && ordering.lt(r.entryInfo.sortDate, until))
     renderMultiple(renderLocation, rs.toVector)
 
   def renderSince(renderLocation: SiteLocation, from: Instant): String =
