@@ -3,6 +3,8 @@ package unstatic.ztapir.simple
 import untemplate.*
 
 import java.time.Instant
+
+import scala.util.Try
 import scala.collection.*
 
 // XXX: Here is some of where I'd like to warn,
@@ -26,16 +28,22 @@ object Attribute:
           a match
             case s : String => Some(s.trim)
             case _          => None
-      val StringList : Converter[List[String]]  =
+      val StringList : Converter[List[String]] =
         (a : Any) =>
           a match
             case s : String => Some(s.split(",").map(_.trim).toList)
             case _          => None
-      val Timestamp : Converter[Instant]  =
+      val Timestamp : Converter[Instant] =
         (a : Any) =>
           a match
             case s : String  => Some( parseTimestamp(s).get )
             case i : Instant => Some(i)
+            case _           => None
+      val SimpleBoolean : Converter[Boolean] =
+        (a : Any) =>
+          a match
+            case b : Boolean => Some(b)
+            case s : String  => Try( s.toBoolean ).toOption
             case _           => None
     type Converter[T] = Any => Option[T]
     abstract class Abstract[T](val converter : Key.Converter[T], val variations : List[String]):
@@ -64,5 +72,7 @@ object Attribute:
     case `Permalink`    extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `MediaDir`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `LinkName`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `Anchor`       extends Key[String]      (Key.Converter.SimpleString,             "Uid" :: Nil)
+    case `Anchor`       extends Key[String]      (Key.Converter.SimpleString, "Uid"             :: Nil)
+    case `Updated`      extends Key[Instant]     (Key.Converter.Timestamp,                         Nil)
+    case `Sprout`       extends Key[Boolean]     (Key.Converter.SimpleBoolean,                     Nil) // see https://v5.chriskrycho.com/essays/feeds-are-not-fit-for-gardening/
 
