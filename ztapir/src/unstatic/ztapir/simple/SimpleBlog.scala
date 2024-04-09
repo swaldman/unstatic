@@ -1,6 +1,7 @@
 package unstatic.ztapir.simple
 
 import java.time.{Instant, ZoneId, ZonedDateTime}
+import java.time.format.DateTimeFormatter.ISO_INSTANT
 import scala.collection.*
 import unstatic.{Site, *}
 import unstatic.UrlPath.*
@@ -40,22 +41,41 @@ object SimpleBlog:
         authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})")
       val mbDcCreatorElem =
         authorsString.map( as => Element.DublinCore.Creator( as ) )
+      val mbTitleElement =
+        entryInfo.mbTitle.map: title =>
+          val annotatedTitle = if entryInfo.updated.nonEmpty then "Updated: " + title else title
+          Element.Title( annotatedTitle )
+      val guidElement =
+        val freshGuid = Attribute.Key.`ReidentifyOnUpdate`.caseInsensitiveCheck(resolved.entryUntemplate) == Some(true)
+        def simpleGuid = Element.Guid(isPermalink = true, absPermalink.toString)
+        if freshGuid then
+          entryInfo.updated match
+            case Some( instant ) =>
+              val ts = ISO_INSTANT.format( instant.atZone( blog.timeZone ) )
+              Element.Guid(isPermalink = false, s"Updated-${ts}-" + absPermalink.toString)
+            case _ =>
+              simpleGuid
+        else
+          simpleGuid
       val standardItem =
         Element.Item(
-          title = entryInfo.mbTitle.map( Element.Title.apply(_, Nil, Nil) ),
+          title = mbTitleElement,
           link = Some(Element.Link(absPermalink.toString)),
           description = Some(Element.Description(summary)),
           author = Some(Element.Author(nospamAuthor)),
           categories = Nil,
           comments = None,
           enclosure = None,
-          guid = Some(Element.Guid(isPermalink = true, absPermalink.toString)),
+          guid = Some(guidElement),
           pubDate = Some(Element.PubDate(entryInfo.pubDate.atZone(blog.timeZone))),
           source = None
         )
-      val baseItem = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))  
-      val itemWithoutExtraChildren = if fullContent then baseItem.withExtra(Element.Content.Encoded(absolutizedHtml)) else baseItem
-      itemWithoutExtraChildren.withExtras( extraChildren ).withExtras( extraChildrenRaw )
+      val baseItem =
+        val withCreator = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
+        val withFullContent = if fullContent then withCreator.withExtra(Element.Content.Encoded(absolutizedHtml)) else withCreator
+        val withUpdated = entryInfo.updated.fold( withFullContent )( updateTime => withFullContent.withExtra( Element.Atom.Updated( updateTime ) ) )
+        withUpdated
+      baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
     def defaultChannelSpecNow( blog : SimpleBlog ) : Element.Channel.Spec =
       Element.Channel.Spec (
@@ -132,11 +152,12 @@ trait SimpleBlog extends ZTBlog:
       authors : Seq[String],
       tags : Seq[String],
       pubDate : Instant,
+      updated : Option[Instant],
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
     ):
-      def sortDate : Instant = pubDate
+      def sortDate : Instant = updated.getOrElse(pubDate)
     end Info
     final case class Input (
       blog : SimpleBlog,
@@ -151,7 +172,17 @@ trait SimpleBlog extends ZTBlog:
   
   object Layout:
     object Input:
-      case class Entry( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, articleContentHtml : String, info : EntryInfo, sourceEntry : EntryResolved, previousEntry : Option[EntryResolved], nextEntry : Option[EntryResolved], presentation : SimpleBlog.this.Entry.Presentation )
+      case class Entry(
+        blog : SimpleBlog,
+        site : Site,
+        renderLocation : SiteLocation,
+        articleContentHtml : String,
+        info : EntryInfo,
+        sourceEntry : EntryResolved,
+        previousEntry : Option[EntryResolved],
+        nextEntry : Option[EntryResolved],
+        presentation : SimpleBlog.this.Entry.Presentation
+      )
       case class Page( blog : SimpleBlog, site : Site, renderLocation : SiteLocation, mainContentHtml : String, sourceEntries : immutable.Seq[EntryResolved] )
     end Input
   end Layout
@@ -229,11 +260,12 @@ trait SimpleBlog extends ZTBlog:
     val authors     = Key.`Author`.caseInsensitiveCheck(template).getOrElse(defaultAuthors)
     val tags        = Key.`Tag`.caseInsensitiveCheck(template).getOrElse(Nil)
     val pubDate     = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
+    val updated     = Key.`Updated`.caseInsensitiveCheck(template)
     val contentType = normalizeContentType( findContentType( template ) )
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, tags, pubDate, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, tags, pubDate, updated, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : EntryInput =

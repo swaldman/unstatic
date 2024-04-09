@@ -64,15 +64,16 @@ object Attribute:
               case Nil          => None
           find(allNames)
   enum Key[T]( converter : Key.Converter[T], variations : List[String] ) extends Key.Abstract[T](converter, variations):
-    case `Title`        extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `Author`       extends Key[List[String]](Key.Converter.StringList,   "Authors"         :: Nil)
-    case `Tag`          extends Key[List[String]](Key.Converter.StringList,   "Tags"            :: Nil)
-    case `PubDate`      extends Key[Instant]     (Key.Converter.Timestamp,    "PublicationDate" :: Nil)
-    case `Content-Type` extends Key[String]      (Key.Converter.SimpleString, "ContentType"     :: Nil)
-    case `Permalink`    extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `MediaDir`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `LinkName`     extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `Anchor`       extends Key[String]      (Key.Converter.SimpleString, "Uid"             :: Nil)
-    case `Updated`      extends Key[Instant]     (Key.Converter.Timestamp,                         Nil)
-    case `Sprout`       extends Key[Boolean]     (Key.Converter.SimpleBoolean,                     Nil) // see https://v5.chriskrycho.com/essays/feeds-are-not-fit-for-gardening/
+    case `Title`              extends Key[String]      (Key.Converter.SimpleString,                      Nil)
+    case `Author`             extends Key[List[String]](Key.Converter.StringList,   "Authors"         :: Nil)
+    case `Tag`                extends Key[List[String]](Key.Converter.StringList,   "Tags"            :: Nil)
+    case `PubDate`            extends Key[Instant]     (Key.Converter.Timestamp,    "PublicationDate" :: Nil)
+    case `Content-Type`       extends Key[String]      (Key.Converter.SimpleString, "ContentType"     :: Nil)
+    case `Permalink`          extends Key[String]      (Key.Converter.SimpleString,                      Nil)
+    case `MediaDir`           extends Key[String]      (Key.Converter.SimpleString,                      Nil)
+    case `LinkName`           extends Key[String]      (Key.Converter.SimpleString,                      Nil)
+    case `Anchor`             extends Key[String]      (Key.Converter.SimpleString, "Uid"             :: Nil)
+    case `Updated`            extends Key[Instant]     (Key.Converter.Timestamp,                         Nil)
+    case `Sprout`             extends Key[Boolean]     (Key.Converter.SimpleBoolean,                     Nil) // see https://v5.chriskrycho.com/essays/feeds-are-not-fit-for-gardening/
+    case `ReidentifyOnUpdate` extends Key[Boolean]     (Key.Converter.SimpleBoolean,                     Nil) // we'll change GUID with each change to updated, which may cause reannouncements
 
