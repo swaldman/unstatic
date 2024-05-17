@@ -9,6 +9,8 @@ import unstatic.ztapir.*
 import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 
 object SimpleBlog:
+  val  RssWhenUpdated = Element.Iffy.WhenUpdated.Value
+  type RssWhenUpdated = Element.Iffy.WhenUpdated.Value
   object Htmlifier:
     val identity : Htmlifier = (s : String, opts : Options) => s
     val preText : Htmlifier = (s : String, opts : Options) => s"<pre>${s}</pre>"
@@ -21,7 +23,13 @@ object SimpleBlog:
       val lastSpace = tmp.lastIndexOf(' ')
       (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
 
-    def rssItem( blog : SimpleBlog )( resolved : blog.EntryResolved, fullContent : Boolean, extraChildren : List[audiofluidity.rss.Element[?]] = Nil, extraChildrenRaw : List[scala.xml.Elem] = Nil) : Element.Item =
+    def rssItem( blog : SimpleBlog )(
+      resolved : blog.EntryResolved,
+      channelLevelWhenUpdated : RssWhenUpdated,
+      fullContent : Boolean,
+      extraChildren : List[audiofluidity.rss.Element[?]] = Nil,
+      extraChildrenRaw : List[scala.xml.Elem] = Nil
+    ) : Element.Item =
       val entryInfo = resolved.entryInfo
       val absPermalink = blog.site.absFromSiteRooted(entryInfo.permalinkPathSiteRooted)
       val permalinkRelativeHtml = blog.renderSingleFragment(blog.SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, blog.Entry.Presentation.Rss)
@@ -41,26 +49,25 @@ object SimpleBlog:
         authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})")
       val mbDcCreatorElem =
         authorsString.map( as => Element.DublinCore.Creator( as ) )
-      val mbTitleElement =
-        entryInfo.mbTitle.map: title =>
-          val annotatedTitle = if entryInfo.updated.nonEmpty then "Updated: " + title else title
-          Element.Title( annotatedTitle )
-      val guidElement =
-        val freshGuid = Attribute.Key.`ReidentifyOnUpdate`.caseInsensitiveCheck(resolved.entryUntemplate) == Some(true)
-        def simpleGuid = Element.Guid(isPermalink = true, absPermalink.toString)
+      val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
+      val linkElement = Element.Link(absPermalink.toString)
+      val itemWhenUpdated = Attribute.Key.`WhenUpdated`.caseInsensitiveCheck(resolved.entryUntemplate).flatMap( RssWhenUpdated.lenientParse )
+      val whenUpdated = itemWhenUpdated.getOrElse(channelLevelWhenUpdated)
+      val updatedInstantFormatted = entryInfo.updated.map( instant => ISO_INSTANT.format( instant.atZone( blog.timeZone ) ) )
+      val (guidElement, mbOriginalGuid) =
+        val freshGuid = whenUpdated == RssWhenUpdated.Resurface || whenUpdated == RssWhenUpdated.Reannounce
+        val simpleGuid = Element.Guid(isPermalink = true, absPermalink.toString)
         if freshGuid then
-          entryInfo.updated match
-            case Some( instant ) =>
-              val ts = ISO_INSTANT.format( instant.atZone( blog.timeZone ) )
-              Element.Guid(isPermalink = false, s"Updated-${ts}-" + absPermalink.toString)
-            case _ =>
-              simpleGuid
+          updatedInstantFormatted match
+            case Some( ts ) => ( Element.Guid(isPermalink = false, absPermalink.toString + s"#updated-${ts}"), Some(simpleGuid) )
+            case _          => ( simpleGuid, None )
         else
-          simpleGuid
+          ( simpleGuid, None )
+
       val standardItem =
         Element.Item(
           title = mbTitleElement,
-          link = Some(Element.Link(absPermalink.toString)),
+          link = Some(linkElement),
           description = Some(Element.Description(summary)),
           author = Some(Element.Author(nospamAuthor)),
           categories = Nil,
@@ -74,7 +81,9 @@ object SimpleBlog:
         val withCreator = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
         val withFullContent = if fullContent then withCreator.withExtra(Element.Content.Encoded(absolutizedHtml)) else withCreator
         val withUpdated = entryInfo.updated.fold( withFullContent )( updateTime => withFullContent.withExtra( Element.Atom.Updated( updateTime ) ) )
-        withUpdated
+        val withItemWhenUpdated = itemWhenUpdated.fold( withUpdated )( wuv => withUpdated.withExtra(Element.Iffy.WhenUpdated(wuv)) )
+        val withOrigGuid = mbOriginalGuid.fold( withItemWhenUpdated )( og => withItemWhenUpdated.withExtra( Element.Iffy.OriginalGuid(og.id) ) )
+        withOrigGuid
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
     def defaultChannelSpecNow( blog : SimpleBlog ) : Element.Channel.Spec =
@@ -94,7 +103,7 @@ object SimpleBlog:
         `type` = Some("application/rss+xml")
       )
 
-    val DefaultRssNamespaces = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Nil
+    val DefaultRssNamespaces = Namespace.RdfContent :: Namespace.DublinCore :: Namespace.Atom :: Namespace.Iffy :: Nil
 
     val DefaultFeedToXmlSpec : Element.ToXml.Spec = Element.ToXml.Spec.Default
 
@@ -103,10 +112,10 @@ object SimpleBlog:
     def defaultItemable( blog : SimpleBlog ) : Itemable[blog.EntryResolved] =
       new Itemable[blog.EntryResolved]:
         extension (resolved : blog.EntryResolved)
-          def toItem : Element.Item = rssItem( blog )(resolved, blog.fullContentFeed)
+          def toItem : Element.Item = rssItem( blog )(resolved, blog.rssWhenUpdated, blog.fullContentFeed)
 
     def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
-      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved )
+      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.rssWhenUpdated, blog.entriesResolved )
 
     // candidateEntriesResolved are expected to be already reverse-chronological sorted!
     def makeFeed( blog : SimpleBlog )(
@@ -115,6 +124,7 @@ object SimpleBlog:
       onlySince                : Option[Instant],
       channelSpec              : Element.Channel.Spec,
       rssNamespaces            : List[Namespace],
+      rssWhenUpdated           : RssWhenUpdated,
       candidateEntriesResolved : immutable.SortedSet[blog.EntryResolved],
       extraChannelChildren     : List[Element[?]]     = Nil,
       extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
@@ -135,7 +145,18 @@ object SimpleBlog:
               candidateEntriesResolved.take(max)
             case (None,None) =>
               candidateEntriesResolved
-        val channel = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog) )/*.withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )*/
+        val channel =
+          val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog) )
+          val completenessValue =
+            if tmp.items.forall( _.guid.nonEmpty ) then
+              if blog.fullContentFeed then
+                Element.Iffy.Completeness.Value.Content
+              else
+                Element.Iffy.Completeness.Value.Metadata
+            else
+              Element.Iffy.Completeness.Value.Ping
+          val completeness = Element.Iffy.Completeness( completenessValue )
+          tmp.withExtra(completeness).withExtra(Element.Iffy.WhenUpdated(rssWhenUpdated)).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
         Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
   end Rss
 end SimpleBlog
@@ -169,7 +190,7 @@ trait SimpleBlog extends ZTBlog:
     ):
       def entryById( id : String ) : EntryResolved = SimpleBlog.this.entryById(id)
   end Entry
-  
+
   object Layout:
     object Input:
       case class Entry(
@@ -195,6 +216,8 @@ trait SimpleBlog extends ZTBlog:
 
   // you can override this
   val fullContentFeed = true
+
+  val rssWhenUpdated = SimpleBlog.RssWhenUpdated.Resurface
 
   lazy val feed          : Element.Rss              = SimpleBlog.Rss.makeDefaultFeed( this )
   lazy val feedToXmlSpec : Element.ToXml.Spec       = SimpleBlog.Rss.DefaultFeedToXmlSpec
