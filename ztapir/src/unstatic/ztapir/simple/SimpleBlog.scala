@@ -79,11 +79,11 @@ object SimpleBlog:
         )
       val baseItem =
         val withCreator = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
-        val withFullContent = if fullContent then withCreator.withExtra(Element.Content.Encoded(absolutizedHtml)) else withCreator
-        val withUpdated = entryInfo.updated.fold( withFullContent )( updateTime => withFullContent.withExtra( Element.Atom.Updated( updateTime ) ) )
+        val withUpdated = entryInfo.updated.fold( withCreator )( updateTime => withCreator.withExtra( Element.Atom.Updated( updateTime ) ) )
         val withItemWhenUpdated = itemWhenUpdated.fold( withUpdated )( wuv => withUpdated.withExtra(Element.Iffy.WhenUpdated(wuv)) )
         val withOrigGuid = mbOriginalGuid.fold( withItemWhenUpdated )( og => withItemWhenUpdated.withExtra( Element.Iffy.OriginalGuid(og.id) ) )
-        withOrigGuid
+        val withFullContent = if fullContent then withOrigGuid.withExtra(Element.Content.Encoded(absolutizedHtml)) else withOrigGuid
+        withFullContent
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
     def defaultChannelSpecNow( blog : SimpleBlog ) : Element.Channel.Spec =
