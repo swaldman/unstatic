@@ -143,18 +143,21 @@ object SimpleBlog:
     ) : Element.Rss =
         given Itemable[blog.EntryResolved] = itemable
         val instantOrdering = summon[Ordering[Instant]]
+        val rssEntryOrdering = // sort by updated date if present, to resurface recently updated posts
+          Ordering.by( (er : blog.EntryResolved) => (er.entryInfo.rssSortDate, er.entryUntemplate.UntemplateFullyQualifiedName) ).reverse
+        val candidateEntriesResolvedResorted = immutable.SortedSet.from( candidateEntriesResolved )( using rssEntryOrdering )  
         val items =
           ( maxEntries, onlySince ) match
             case(Some(max), Some(since)) =>
-              candidateEntriesResolved
-                .filter( resolved => instantOrdering.compare(resolved.entryInfo.sortDate,since) > 0 )
+              candidateEntriesResolvedResorted
+                .filter( resolved => instantOrdering.compare(resolved.entryInfo.rssSortDate,since) > 0 )
                 .take(max)
             case (None, Some(since)) =>
-              candidateEntriesResolved.filter( resolved => instantOrdering.compare(resolved.entryInfo.sortDate,since) > 0 )
+              candidateEntriesResolvedResorted.filter( resolved => instantOrdering.compare(resolved.entryInfo.rssSortDate,since) > 0 )
             case (Some(max), None) =>
-              candidateEntriesResolved.take(max)
+              candidateEntriesResolvedResorted.take(max)
             case (None,None) =>
-              candidateEntriesResolved
+              candidateEntriesResolvedResorted
         val channel =
           val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog) )
           val completenessValue =
@@ -188,7 +191,7 @@ trait SimpleBlog extends ZTBlog:
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
     ):
-      def sortDate : Instant = updated.getOrElse(pubDate)
+      def rssSortDate : Instant = updated.getOrElse(pubDate)
     end Info
     final case class Input (
       blog : SimpleBlog,
@@ -257,7 +260,7 @@ trait SimpleBlog extends ZTBlog:
    * Reverse-chronological!
    */
   given entryOrdering : Ordering[EntryResolved] =
-    Ordering.by( (er : EntryResolved) => (er.entryInfo.sortDate, er.entryUntemplate.UntemplateFullyQualifiedName) ).reverse
+    Ordering.by( (er : EntryResolved) => (er.entryInfo.pubDate, er.entryUntemplate.UntemplateFullyQualifiedName) ).reverse
 
   val site                : Site // the type is Blog.this.Site, narrowed to ZTSite by ZTBlog
   val frontPage           : SiteLocation
@@ -375,7 +378,7 @@ trait SimpleBlog extends ZTBlog:
 
   def renderRange(renderLocation: SiteLocation, from: Instant, until: Instant): String =
     val ordering = summon[Ordering[Instant]]
-    val rs = entriesResolved.filter(r => ordering.gteq(from, r.entryInfo.sortDate) && ordering.lt(r.entryInfo.sortDate, until))
+    val rs = entriesResolved.filter(r => ordering.gteq(from, r.entryInfo.pubDate) && ordering.lt(r.entryInfo.pubDate, until))
     renderMultiple(renderLocation, rs.toVector)
 
   def renderSince(renderLocation: SiteLocation, from: Instant): String =
