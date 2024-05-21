@@ -1,7 +1,8 @@
 package unstatic.ztapir.simple
 
 import java.time.{Instant, ZoneId, ZonedDateTime}
-import java.time.format.DateTimeFormatter.ISO_INSTANT
+import java.time.format.DateTimeFormatter
+import DateTimeFormatter.ISO_INSTANT
 import scala.collection.*
 import unstatic.{Site, *}
 import unstatic.UrlPath.*
@@ -82,7 +83,16 @@ object SimpleBlog:
         val withUpdated = entryInfo.updated.fold( withCreator )( updateTime => withCreator.withExtra( Element.Atom.Updated( updateTime ) ) )
         val withItemWhenUpdated = itemWhenUpdated.fold( withUpdated )( wuv => withUpdated.withExtra(Element.Iffy.WhenUpdated(wuv)) )
         val withOrigGuid = mbOriginalGuid.fold( withItemWhenUpdated )( og => withItemWhenUpdated.withExtra( Element.Iffy.OriginalGuid(og.id) ) )
-        val withFullContent = if fullContent then withOrigGuid.withExtra(Element.Content.Encoded(absolutizedHtml)) else withOrigGuid
+        val withFullContent = if fullContent then
+          val fullContentHtml = entryInfo.updated.fold( absolutizedHtml ): instant =>
+            s"""|<div class="rss-updated-note">
+                |  <p><em>Post updated at ${blog.dateTimeFormatter.format(instant)}.</em></p>
+                |  <hr>
+                |</div>
+                |""".stripMargin + absolutizedHtml
+          withOrigGuid.withExtra(Element.Content.Encoded(fullContentHtml))
+        else
+          withOrigGuid
         withFullContent
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
@@ -210,6 +220,11 @@ trait SimpleBlog extends ZTBlog:
 
   // you can override this
   val timeZone: ZoneId = ZoneId.systemDefault()
+
+  // you can override these
+  lazy val dayOnlyFormatter  = DateTimeFormatter.ofPattern("""yyyy'-'MM'-'dd""").withZone(timeZone)
+  lazy val hourOnlyFormatter = DateTimeFormatter.ofPattern("""hh':'mm' 'a' 'zzz""").withZone(timeZone)
+  lazy val dateTimeFormatter = DateTimeFormatter.ofPattern("""yyyy'-'MM'-'dd' @ 'hh':'mm' 'a' 'zzz""").withZone(timeZone)
 
   // you can override this
   val defaultSummaryAsDescriptionMaxLen = 500
