@@ -60,7 +60,7 @@ object SimpleBlog:
         val simpleGuid = Element.Guid(isPermalink = true, absPermalink.toString)
         if freshGuid then
           updatedInstantFormatted match
-            case Some( ts ) => ( Element.Guid(isPermalink = false, absPermalink.toString + s"#updated-${ts}"), Some(simpleGuid) )
+            case Some( ts ) => ( Element.Guid(isPermalink = false, s"updated-${ts}-" + absPermalink.toString ), Some(simpleGuid) )
             case _          => ( simpleGuid, None )
         else
           ( simpleGuid, None )
@@ -127,7 +127,7 @@ object SimpleBlog:
     def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
       makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.rssWhenUpdated, blog.entriesResolved )
 
-    // candidateEntriesResolved are expected to be already reverse-chronological sorted!
+    // we now resort candidateEntriesResolved
     def makeFeed( blog : SimpleBlog )(
       itemable                 : Itemable[blog.EntryResolved],
       maxEntries               : Option[Int],
