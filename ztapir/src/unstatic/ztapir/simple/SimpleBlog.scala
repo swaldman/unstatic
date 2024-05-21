@@ -60,7 +60,7 @@ object SimpleBlog:
         val simpleGuid = Element.Guid(isPermalink = true, absPermalink.toString)
         if freshGuid then
           updatedInstantFormatted match
-            case Some( ts ) => ( Element.Guid(isPermalink = false, s"updated-${ts}-" + absPermalink.toString ), Some(simpleGuid) )
+            case Some( ts ) => ( Element.Guid(isPermalink = false, absPermalink.toString + s"#updated-${ts}" ), Some(simpleGuid) )
             case _          => ( simpleGuid, None )
         else
           ( simpleGuid, None )
