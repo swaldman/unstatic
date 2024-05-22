@@ -74,8 +74,4 @@ object Attribute:
     case `LinkName`           extends Key[String]      (Key.Converter.SimpleString,                      Nil)
     case `Anchor`             extends Key[String]      (Key.Converter.SimpleString, "Uid"             :: Nil)
     case `Updated`            extends Key[Instant]     (Key.Converter.Timestamp,                         Nil)
-    case `WhenUpdated`        extends Key[String]      (Key.Converter.SimpleString,                      Nil)
 
-// see https://v5.chriskrycho.com/essays/feeds-are-not-fit-for-gardening/
-// when WhenUpdated is Resurface or Reannounce, we'll change GUID with each change to updated,
-// which hopefully will cause reannouncements

@@ -10,8 +10,6 @@ import unstatic.ztapir.*
 import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 
 object SimpleBlog:
-  val  RssWhenUpdated = Element.Iffy.WhenUpdated.Value
-  type RssWhenUpdated = Element.Iffy.WhenUpdated.Value
   object Htmlifier:
     val identity : Htmlifier = (s : String, opts : Options) => s
     val preText : Htmlifier = (s : String, opts : Options) => s"<pre>${s}</pre>"
@@ -26,7 +24,6 @@ object SimpleBlog:
 
     def rssItem( blog : SimpleBlog )(
       resolved : blog.EntryResolved,
-      channelLevelWhenUpdated : RssWhenUpdated,
       fullContent : Boolean,
       extraChildren : List[audiofluidity.rss.Element[?]] = Nil,
       extraChildrenRaw : List[scala.xml.Elem] = Nil
@@ -52,18 +49,8 @@ object SimpleBlog:
         authorsString.map( as => Element.DublinCore.Creator( as ) )
       val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
       val linkElement = Element.Link(absPermalink.toString)
-      val itemWhenUpdated = Attribute.Key.`WhenUpdated`.caseInsensitiveCheck(resolved.entryUntemplate).flatMap( RssWhenUpdated.lenientParse )
-      val whenUpdated = itemWhenUpdated.getOrElse(channelLevelWhenUpdated)
       val updatedInstantFormatted = entryInfo.updated.map( instant => ISO_INSTANT.format( instant.atZone( blog.timeZone ) ) )
-      val (guidElement, mbOriginalGuid) =
-        val freshGuid = whenUpdated == RssWhenUpdated.Resurface || whenUpdated == RssWhenUpdated.Reannounce
-        val simpleGuid = Element.Guid(isPermalink = true, absPermalink.toString)
-        if freshGuid then
-          updatedInstantFormatted match
-            case Some( ts ) => ( Element.Guid(isPermalink = false, absPermalink.toString + s"#updated-${ts}" ), Some(simpleGuid) )
-            case _          => ( simpleGuid, None )
-        else
-          ( simpleGuid, None )
+      val guidElement = Element.Guid(isPermalink = true, absPermalink.toString)
 
       val standardItem =
         Element.Item(
@@ -81,18 +68,10 @@ object SimpleBlog:
       val baseItem =
         val withCreator = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
         val withUpdated = entryInfo.updated.fold( withCreator )( updateTime => withCreator.withExtra( Element.Atom.Updated( updateTime ) ) )
-        val withItemWhenUpdated = itemWhenUpdated.fold( withUpdated )( wuv => withUpdated.withExtra(Element.Iffy.WhenUpdated(wuv)) )
-        val withOrigGuid = mbOriginalGuid.fold( withItemWhenUpdated )( og => withItemWhenUpdated.withExtra( Element.Iffy.OriginalGuid(og.id) ) )
         val withFullContent = if fullContent then
-          val fullContentHtml = entryInfo.updated.fold( absolutizedHtml ): instant =>
-            s"""|<div class="rss-updated-note">
-                |  <p><em>Post updated at ${blog.dateTimeFormatter.format(instant)}.</em></p>
-                |  <hr>
-                |</div>
-                |""".stripMargin + absolutizedHtml
-          withOrigGuid.withExtra(Element.Content.Encoded(fullContentHtml))
+          withUpdated.withExtra(Element.Content.Encoded(absolutizedHtml))
         else
-          withOrigGuid
+          withUpdated
         withFullContent
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
@@ -122,10 +101,10 @@ object SimpleBlog:
     def defaultItemable( blog : SimpleBlog ) : Itemable[blog.EntryResolved] =
       new Itemable[blog.EntryResolved]:
         extension (resolved : blog.EntryResolved)
-          def toItem : Element.Item = rssItem( blog )(resolved, blog.rssWhenUpdated, blog.fullContentFeed)
+          def toItem : Element.Item = rssItem( blog )(resolved, blog.fullContentFeed)
 
     def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
-      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.rssWhenUpdated, blog.entriesResolved )
+      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved )
 
     // we now resort candidateEntriesResolved
     def makeFeed( blog : SimpleBlog )(
@@ -134,7 +113,6 @@ object SimpleBlog:
       onlySince                : Option[Instant],
       channelSpec              : Element.Channel.Spec,
       rssNamespaces            : List[Namespace],
-      rssWhenUpdated           : RssWhenUpdated,
       candidateEntriesResolved : immutable.SortedSet[blog.EntryResolved],
       extraChannelChildren     : List[Element[?]]     = Nil,
       extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
@@ -143,21 +121,18 @@ object SimpleBlog:
     ) : Element.Rss =
         given Itemable[blog.EntryResolved] = itemable
         val instantOrdering = summon[Ordering[Instant]]
-        val rssEntryOrdering = // sort by updated date if present, to resurface recently updated posts
-          Ordering.by( (er : blog.EntryResolved) => (er.entryInfo.rssSortDate, er.entryUntemplate.UntemplateFullyQualifiedName) ).reverse
-        val candidateEntriesResolvedResorted = immutable.SortedSet.from( candidateEntriesResolved )( using rssEntryOrdering )  
         val items =
           ( maxEntries, onlySince ) match
             case(Some(max), Some(since)) =>
-              candidateEntriesResolvedResorted
-                .filter( resolved => instantOrdering.compare(resolved.entryInfo.rssSortDate,since) > 0 )
+              candidateEntriesResolved
+                .filter( resolved => instantOrdering.compare(resolved.entryInfo.pubDate,since) > 0 )
                 .take(max)
             case (None, Some(since)) =>
-              candidateEntriesResolvedResorted.filter( resolved => instantOrdering.compare(resolved.entryInfo.rssSortDate,since) > 0 )
+              candidateEntriesResolved.filter( resolved => instantOrdering.compare(resolved.entryInfo.pubDate,since) > 0 )
             case (Some(max), None) =>
-              candidateEntriesResolvedResorted.take(max)
+              candidateEntriesResolved.take(max)
             case (None,None) =>
-              candidateEntriesResolvedResorted
+              candidateEntriesResolved
         val channel =
           val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog) )
           val completenessValue =
@@ -169,7 +144,7 @@ object SimpleBlog:
             else
               Element.Iffy.Completeness.Value.Ping
           val completeness = Element.Iffy.Completeness( completenessValue )
-          tmp.withExtra(completeness).withExtra(Element.Iffy.WhenUpdated(rssWhenUpdated)).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
+          tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
         Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
   end Rss
 end SimpleBlog
@@ -190,9 +165,7 @@ trait SimpleBlog extends ZTBlog:
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
-    ):
-      def rssSortDate : Instant = updated.getOrElse(pubDate)
-    end Info
+    )
     final case class Input (
       blog : SimpleBlog,
       site : Site, // duplicative, since it's accessible from SiteLocations. But easy
@@ -234,8 +207,6 @@ trait SimpleBlog extends ZTBlog:
 
   // you can override this
   val fullContentFeed = true
-
-  val rssWhenUpdated = SimpleBlog.RssWhenUpdated.Resurface
 
   lazy val feed          : Element.Rss              = SimpleBlog.Rss.makeDefaultFeed( this )
   lazy val feedToXmlSpec : Element.ToXml.Spec       = SimpleBlog.Rss.DefaultFeedToXmlSpec
