@@ -45,11 +45,47 @@ object ZTEndpointBinding:
 
   def fromClassLoaderResource( siteRootedPath : Rooted, site : ZTSite, cl : ClassLoader, clPath : String, mimeType : String, identifiers : immutable.Set[String] ) : ZTEndpointBinding.BytesGenerable =
     val ztServerEndpoint = classLoaderResourceEndpoint( siteRootedPath, site, cl, clPath )
-    val mediaType =
-      MediaType.parse(mimeType) match
-        case Left( message ) => throw new BadMediaType( message )
-        case Right( mt )     => mt
+    val mediaType = mediaTypeFromMimeType(mimeType)
     BytesGenerable( siteRootedPath, ztServerEndpoint, arraySeqByteTask(() => cl.getResourceAsStream(clPath)), mediaType, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
+
+  // so that we can include past versions of updated resources
+  def fromGitRepoCommitPath( siteRootedPath : Rooted, site : ZTSite, gitRepository : JPath, commitHex : String, inRepoPath : Rel, mimeType : String, identifiers : immutable.Set[String] ) : ZTEndpointBinding.BytesGenerable =
+    val mediaType = mediaTypeFromMimeType(mimeType)
+    val task = zio.ZIO.attempt:
+      import java.io.File
+      import java.nio.file.Files
+      import org.eclipse.jgit.lib.*
+      import org.eclipse.jgit.storage.file.FileRepositoryBuilder
+      import org.eclipse.jgit.revwalk.RevWalk
+      import org.eclipse.jgit.treewalk.TreeWalk
+      import scala.util.Using
+
+      if !Files.isDirectory(gitRepository) then
+        throw new BadGitRepository( s"'${gitRepository}' is not a directory, not a valid git repository." )
+      else
+        val repoFile =
+          val innerDotGit = gitRepository.resolve(".git")
+          def objectsInside = Files.exists( gitRepository.resolve("objects") )
+          if Files.exists( innerDotGit ) then
+            innerDotGit.toFile()
+          else if objectsInside then
+            gitRepository.toFile
+          else
+            scribe.warn(s"Uh oh... '${gitRepository}' doesn't look like a valid git repository! We'll try it anyway, but we're not optimistic.")
+            gitRepository.toFile()
+        Using.resource(FileRepositoryBuilder.create(repoFile)): repo =>
+          Using.resource(repo.newObjectReader()): reader =>
+            Using.resource(new RevWalk(reader)): walk =>
+              val oid = repo.resolve(commitHex)
+              val revCommit = walk.parseCommit(oid)
+              Using.resource( TreeWalk.forPath( reader, inRepoPath.toString(), revCommit.getTree ) ): treewalk =>
+                if treewalk != null then
+                  immutable.ArraySeq.unsafeWrapArray( reader.open(treewalk.getObjectId(0)).getBytes() );
+                else
+                  throw new GitResourceNotFound("Failed to find path '${inRepoPath}' in commit '${commitHex}' of git repository '${gitRepository}'.")
+    end task
+    val ztServerEndpoint = publicReadOnlyUtf8Endpoint( mediaType )( siteRootedPath, site, task )
+    BytesGenerable( siteRootedPath, ztServerEndpoint, task, mediaType, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.StringGenerable =
     StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, mediaDirSiteRooted, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))

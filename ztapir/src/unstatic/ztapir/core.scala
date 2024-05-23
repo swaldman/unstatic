@@ -157,3 +157,8 @@ private def staticFileServingEndpoint(siteRootedPath: Rooted, site: Site, file: 
       scribe.warn(s"A UrlPath marked as a directory (would print with terminal slash) is given as endpoint for single file '${file}'.")
   val inputs = inputsForFixedPath(serverRootedPath) // we know it's not root
   staticFileGetServerEndpoint[Task](inputs)(file.toAbsolutePath.toString)
+
+private def mediaTypeFromMimeType( mimeType : String ) : MediaType =
+  MediaType.parse(mimeType) match
+    case Left( message ) => throw new BadMediaType( message )
+    case Right( mt )     => mt

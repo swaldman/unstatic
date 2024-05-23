@@ -16,9 +16,9 @@ trait ZTBlog extends Blog with ZTEndpointBinding.Source:
   // you can override any of these
   val entryFragmentsResolveHashSpecials   = true   // memoization of fragments not supported
   val entryTopLevelResolveHashSpecials    = false
-  val entryTopLevelMemoize                = true
+  val entryTopLevelMemoize                = true   // memoize single-entryies embedded in top-level layout
   val multipleTopLevelResolveHashSpecials = false
-  val multipleTopLevelMemoize             = true
+  val multipleTopLevelMemoize             = true   // memoize production of multple posts in top-level layouts
 
   def mediaDir( resolved : EntryResolved ) : SiteLocation
 
