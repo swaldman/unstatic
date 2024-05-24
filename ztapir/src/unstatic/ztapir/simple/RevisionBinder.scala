@@ -8,7 +8,7 @@ import scala.collection.immutable
 import java.nio.file.Path as JPath
 
 object RevisionBinder:
-  type RevisionPathFinder = (Rooted, String) => Rooted
+  type RevisionPathFinder = (Rooted, String) => Rooted // yields a site-rooted path
   object GitByCommit:
     val DefaultRevisionPathFinder : RevisionPathFinder  = (origPath : Rooted, revisionSpec : String) =>
       require( !origPath.isRoot && !origPath.isDir, s"'$origPath' represents a directory or root, we only convert individual leaf resources to prior revisions." )
