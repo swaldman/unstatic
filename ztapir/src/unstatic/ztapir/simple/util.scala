@@ -13,6 +13,18 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document as JsoupDocument
 
 import Attribute.Key
+import sttp.tapir.EndpointIO.annotations.description
+
+object UpdateRecord:
+  def apply( timestamp : String, description : Option[String], supercededVersionSpec : Option[String], tz : ZoneId = ZoneId.systemDefault() ) : UpdateRecord =
+    apply( parseTimestamp(timestamp, tz).get, description, supercededVersionSpec )
+
+  given ordering : Ordering[UpdateRecord] =
+    Ordering.by( (ur : UpdateRecord) => (ur.timestamp,ur.description,ur.supercededRevisionSpec) ).reverse
+
+case class UpdateRecord( timestamp : Instant, description : Option[String], supercededRevisionSpec : Option[String] )
+
+private val LINESEP = scala.util.Properties.lineSeparator
 
 def findContentType( ut : untemplate.Untemplate[?,?] ) : String =
   (Key.`Content-Type`.caseInsensitiveCheck(ut) orElse contentTypeFromSuffix(ut.UntemplateName)).getOrElse("text/plain")

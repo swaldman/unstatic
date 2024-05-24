@@ -5,7 +5,7 @@ import untemplate.*
 import java.time.Instant
 
 import scala.util.Try
-import scala.collection.*
+import scala.collection.{immutable, IterableOnce}
 
 // XXX: Here is some of where I'd like to warn,
 //      if things aren't found or aren't of
@@ -45,6 +45,13 @@ object Attribute:
             case b : Boolean => Some(b)
             case s : String  => Try( s.toBoolean ).toOption
             case _           => None
+      val UpdateRecords : Converter[immutable.SortedSet[UpdateRecord]] =
+        (a : Any) =>
+          a match
+            case io : IterableOnce[UpdateRecord] @unchecked => // have to check at runtime
+              val out = immutable.SortedSet.from(io)
+              if out.forall( _.isInstanceOf[UpdateRecord] ) then Some(out) else None
+            case _ => None
     type Converter[T] = Any => Option[T]
     abstract class Abstract[T](val converter : Key.Converter[T], val variations : List[String]):
       lazy val allNames = (this.toString :: this.variations)
@@ -64,14 +71,14 @@ object Attribute:
               case Nil          => None
           find(allNames)
   enum Key[T]( converter : Key.Converter[T], variations : List[String] ) extends Key.Abstract[T](converter, variations):
-    case `Title`              extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `Author`             extends Key[List[String]](Key.Converter.StringList,   "Authors"         :: Nil)
-    case `Tag`                extends Key[List[String]](Key.Converter.StringList,   "Tags"            :: Nil)
-    case `PubDate`            extends Key[Instant]     (Key.Converter.Timestamp,    "PublicationDate" :: Nil)
-    case `Content-Type`       extends Key[String]      (Key.Converter.SimpleString, "ContentType"     :: Nil)
-    case `Permalink`          extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `MediaDir`           extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `LinkName`           extends Key[String]      (Key.Converter.SimpleString,                      Nil)
-    case `Anchor`             extends Key[String]      (Key.Converter.SimpleString, "Uid"             :: Nil)
-    case `Updated`            extends Key[Instant]     (Key.Converter.Timestamp,                         Nil)
+    case `Title`              extends Key[String]                           (Key.Converter.SimpleString,                      Nil)
+    case `Author`             extends Key[List[String]]                     (Key.Converter.StringList,   "Authors"         :: Nil)
+    case `Tag`                extends Key[List[String]]                     (Key.Converter.StringList,   "Tags"            :: Nil)
+    case `PubDate`            extends Key[Instant]                          (Key.Converter.Timestamp,    "PublicationDate" :: Nil)
+    case `Content-Type`       extends Key[String]                           (Key.Converter.SimpleString, "ContentType"     :: Nil)
+    case `Permalink`          extends Key[String]                           (Key.Converter.SimpleString,                      Nil)
+    case `MediaDir`           extends Key[String]                           (Key.Converter.SimpleString,                      Nil)
+    case `LinkName`           extends Key[String]                           (Key.Converter.SimpleString,                      Nil)
+    case `Anchor`             extends Key[String]                           (Key.Converter.SimpleString, "Uid"             :: Nil)
+    case `UpdateHistory`      extends Key[immutable.SortedSet[UpdateRecord]](Key.Converter.UpdateRecords,                     Nil)
 

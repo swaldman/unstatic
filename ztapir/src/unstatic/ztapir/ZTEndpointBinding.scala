@@ -49,6 +49,8 @@ object ZTEndpointBinding:
     BytesGenerable( siteRootedPath, ztServerEndpoint, arraySeqByteTask(() => cl.getResourceAsStream(clPath)), mediaType, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   // so that we can include past versions of updated resources
+  // see https://github.com/eclipse-jgit/jgit/wiki/User-Guide
+  //     https://stackoverflow.com/questions/1685228/how-to-cat-a-file-in-jgit
   def fromGitRepoCommitPath( siteRootedPath : Rooted, site : ZTSite, gitRepository : JPath, commitHex : String, inRepoPath : Rel, mimeType : String, identifiers : immutable.Set[String] ) : ZTEndpointBinding.BytesGenerable =
     val mediaType = mediaTypeFromMimeType(mimeType)
     val task = zio.ZIO.attempt:

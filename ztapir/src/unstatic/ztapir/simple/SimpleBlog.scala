@@ -3,7 +3,7 @@ package unstatic.ztapir.simple
 import java.time.{Instant, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import DateTimeFormatter.ISO_INSTANT
-import scala.collection.*
+import scala.collection.immutable
 import unstatic.{Site, *}
 import unstatic.UrlPath.*
 import unstatic.ztapir.*
@@ -49,7 +49,6 @@ object SimpleBlog:
         authorsString.map( as => Element.DublinCore.Creator( as ) )
       val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
       val linkElement = Element.Link(absPermalink.toString)
-      val updatedInstantFormatted = entryInfo.updated.map( instant => ISO_INSTANT.format( instant.atZone( blog.timeZone ) ) )
       val guidElement = Element.Guid(isPermalink = true, absPermalink.toString)
 
       val standardItem =
@@ -67,11 +66,8 @@ object SimpleBlog:
         )
       val baseItem =
         val withCreator = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
-        val withUpdated = entryInfo.updated.fold( withCreator )( updateTime => withCreator.withExtra( Element.Atom.Updated( updateTime ) ) )
-        val withFullContent = if fullContent then
-          withUpdated.withExtra(Element.Content.Encoded(absolutizedHtml))
-        else
-          withUpdated
+        val withUpdated = entryInfo.updateHistory.headOption.fold( withCreator )( ur => withCreator.withExtra( Element.Atom.Updated( ur.timestamp ) ) )
+        val withFullContent = if fullContent then withUpdated.withExtra(Element.Content.Encoded(absolutizedHtml)) else withUpdated
         withFullContent
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
@@ -161,7 +157,7 @@ trait SimpleBlog extends ZTBlog:
       authors : Seq[String],
       tags : Seq[String],
       pubDate : Instant,
-      updated : Option[Instant],
+      updateHistory : immutable.SortedSet[UpdateRecord],
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
@@ -258,6 +254,9 @@ trait SimpleBlog extends ZTBlog:
   // you can override this
   def rssFeedIdentifiers = SimpleBlog.Rss.DefaultRssFeedIdentifiers
 
+  // you can override this
+  val revisionBinder : Option[RevisionBinder] = None
+
   /**
    * Filter the index of your untemplates for the blog's entries
    */
@@ -268,16 +267,16 @@ trait SimpleBlog extends ZTBlog:
   def entryInfo( template : EntryUntemplate ) : EntryInfo =
     import Attribute.Key
 
-    val mbTitle     = Key.`Title`.caseInsensitiveCheck(template)
-    val authors     = Key.`Author`.caseInsensitiveCheck(template).getOrElse(defaultAuthors)
-    val tags        = Key.`Tag`.caseInsensitiveCheck(template).getOrElse(Nil)
-    val pubDate     = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
-    val updated     = Key.`Updated`.caseInsensitiveCheck(template)
-    val contentType = normalizeContentType( findContentType( template ) )
+    val mbTitle       = Key.`Title`.caseInsensitiveCheck(template)
+    val authors       = Key.`Author`.caseInsensitiveCheck(template).getOrElse(defaultAuthors)
+    val tags          = Key.`Tag`.caseInsensitiveCheck(template).getOrElse(Nil)
+    val pubDate       = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
+    val updateHistory = Key.`UpdateHistory`.caseInsensitiveCheck(template).getOrElse( immutable.SortedSet.empty[UpdateRecord] )
+    val contentType   = normalizeContentType( findContentType( template ) )
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, tags, pubDate, updated, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : EntryInput =
@@ -316,22 +315,62 @@ trait SimpleBlog extends ZTBlog:
     val info = resolved.entryInfo
     val layoutEntryInput = Layout.Input.Entry(this, site, renderLocation, htmlResult, info, resolved, previous(resolved), next(resolved), presentation )
     val hashSpecialsUnresolvedHtml = layoutEntry( layoutEntryInput )
-    if entryFragmentsResolveHashSpecials then
-      val resolveEscapes = // we only want to do this once for each piece of text
-        presentation match
-          case Entry.Presentation.Single   => !entryTopLevelResolveHashSpecials
-          case Entry.Presentation.Multiple => !multipleTopLevelResolveHashSpecials
-          case Entry.Presentation.Rss      => true // there is never a potential higher-level resolver for RSS fragments
-      val sourceId = s"entry-fragment[${presentation}](source=${resolved.entryUntemplate.UntemplateName}, endpoint=${renderLocation.siteRootedPath})"
-      site.htmlFragmentResolveHashSpecials(sourceId, renderLocation.siteRootedPath, hashSpecialsUnresolvedHtml, Some(resolved.entryInfo.mediaPathSiteRooted), resolveEscapes)
-    else
-      hashSpecialsUnresolvedHtml
+    val mainEntry =
+      if entryFragmentsResolveHashSpecials then
+        val resolveEscapes = // we only want to do this once for each piece of text
+          presentation match
+            case Entry.Presentation.Single   => !entryTopLevelResolveHashSpecials
+            case Entry.Presentation.Multiple => !multipleTopLevelResolveHashSpecials
+            case Entry.Presentation.Rss      => true // there is never a potential higher-level resolver for RSS fragments
+        val sourceId = s"entry-fragment[${presentation}](source=${resolved.entryUntemplate.UntemplateName}, endpoint=${renderLocation.siteRootedPath})"
+        site.htmlFragmentResolveHashSpecials(sourceId, renderLocation.siteRootedPath, hashSpecialsUnresolvedHtml, Some(resolved.entryInfo.mediaPathSiteRooted), resolveEscapes)
+      else
+        hashSpecialsUnresolvedHtml
+    renderEntryPrologue(renderLocation, resolved, presentation) + mainEntry + renderEntryEpilogue(renderLocation, resolved, presentation)
 
   def renderSingle( renderLocation : SiteLocation, resolved : EntryResolved ) : String =
     val entry = renderSingleFragment(renderLocation, resolved, Entry.Presentation.Single)
     val layoutPageInput = Layout.Input.Page(this, site, renderLocation, entry, immutable.Seq(resolved))
     layoutPage( layoutPageInput )
 
+  //you can override this
+  def renderEntryPrologue( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : String =
+    val updateHistory = resolved.entryInfo.updateHistory
+    updateHistory.headOption.fold(""): ur =>
+      val mbPriorRevisionLink =
+        for
+          rb <- this.revisionBinder
+          rs <- ur.supercededRevisionSpec
+        yield
+          val myPath = renderLocation.siteRootedPath
+          myPath.relativizeSibling( rb.revisionPathFinder( resolved.entryInfo.permalinkPathSiteRooted, rs ) )
+      val previousRevisionPart =
+        mbPriorRevisionLink.fold("")( link => s""" The previous revision is <a href="${link}">here</a>. (from ${renderLocation.siteRootedPath} to ${revisionBinder.fold("n/a")(rb=>rb.revisionPathFinder( resolved.entryInfo.permalinkPathSiteRooted, ur.supercededRevisionSpec.getOrElse("n/a") ))})""" )
+      s"""|<div class="entry-prologue">
+          |   <div class="update-prepend">Post updated at ${this.dateTimeFormatter.format(ur.timestamp)}.${previousRevisionPart}</div>
+          |</div>
+          |""".stripMargin
+
+  def renderEntryEpilogue( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : String =
+    val updateHistory = resolved.entryInfo.updateHistory
+    if updateHistory.exists( _.description.nonEmpty ) then
+      val openList =
+        s"""|<div class="entry-epilogue">
+            |   <div class="update-history">
+            |      <div class="update-history-title">Update History:</div>
+            |      <ul>
+            |""".stripMargin
+      val liElems =
+        updateHistory.map: ur =>
+          s"""<li><span class="update-timestamp">${this.dateTimeFormatter.format(ur.timestamp)}</span> &mdash; ${ur.description.getOrElse("<em>No description.</em>")}"""
+      val closeList =
+        s"""|      </ul>
+            |   </div>
+            |</div>
+            |""".stripMargin
+      openList + liElems.mkString("",LINESEP,LINESEP) + closeList
+    else
+      ""
   // you can override this
   def renderMultiplePrologue : String = ""
 
@@ -356,5 +395,11 @@ trait SimpleBlog extends ZTBlog:
     renderRange( renderLocation, from, Instant.now)
 
   override def endpointBindings : immutable.Seq[ZTEndpointBinding] =
-    super.endpointBindings :+ ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feedBytes ), rssFeedIdentifiers )
-
+    val basicBindings = super.endpointBindings
+    val mainRssBinding = ZTEndpointBinding.publicReadOnlyRss( rssFeed, zio.ZIO.attempt( feedBytes ), rssFeedIdentifiers )
+    val pastRevisionBindings =
+      revisionBinder.fold(List.empty[ZTEndpointBinding]): rb =>
+        entriesResolved.toList
+          .flatMap( er => er.entryInfo.updateHistory.toList.map( ur => (er.entryInfo.permalinkPathSiteRooted, ur ) ) )
+          .collect { case ( ppsr, UpdateRecord(_, _, Some( revisionSpec ) ) ) => rb.revisionEndpointBinding(revisionSpec,ppsr,"text/html", immutable.Set.empty) }
+    (basicBindings ++ pastRevisionBindings) :+ mainRssBinding
