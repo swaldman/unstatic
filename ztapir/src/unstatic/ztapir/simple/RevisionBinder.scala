@@ -18,9 +18,9 @@ object RevisionBinder:
         if lastDot == 0 then
           throw new IllegalArgumentException("'$origFilename' appears to be a dotfile. We do not retrieve or convert dotfiles.")
         else if lastDot > 0 then
-          origFilename.substring(0,lastDot) + '_' + revisionSpec + origFilename.substring(lastDot)
+          origFilename.substring(0,lastDot) + "-oldcommit-" + revisionSpec + origFilename.substring(lastDot)
         else
-          origFilename + '_' + revisionSpec
+          origFilename + "-oldcommit-" + revisionSpec
       origPath.resolveSibling(newFilename)
   class GitByCommit( site : ZTSite, repoDir : JPath, origSiteRootedPathToInRepoPath : Rooted => Rel, val revisionPathFinder : RevisionPathFinder = GitByCommit.DefaultRevisionPathFinder ) extends RevisionBinder:
     def revisionEndpointBinding( revisionSpec : String, origSiteRootedPath : Rooted, mimeType : String, identifiers : immutable.Set[String] ) : ZTEndpointBinding =
