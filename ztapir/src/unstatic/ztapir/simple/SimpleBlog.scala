@@ -282,8 +282,31 @@ trait SimpleBlog extends ZTBlog:
     Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, mbPriorRevisionSiteRooted, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
+  private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant ) : Seq[UpdateRecord.ForDisplay] =
+    val initialNoLastMinorRevision = UpdateRecord.ForDisplay( initialPubDate, Some("Initial publication."), None, None, None, None )
+    if updateHistorySorted.nonEmpty then
+      def relativize( rooted : Rooted ) = renderedFrom.relativizeSibling(rooted)
+      lazy val updateRecordToLastMinorRevision = nonCurrentUpdateRecordToOwnLastMinorRevisionSpec( updateHistorySorted )
+      val updateHistory = updateHistorySorted.toVector
+      val current = updateHistory.head
+      val allExceptInitial =
+        updateHistory.map: ur =>
+          this.revisionBinder match
+            case Some(rb) =>
+              val supercededRevisionRelative = ur.supercededRevisionSpec.map( srs => relativize(rb.revisionPathFinder(permalinkPathSiteRooted,srs)) )
+              val lastMinorRevisionSpec = updateRecordToLastMinorRevision.get(ur)
+              val lastMinorRevisionRelative = lastMinorRevisionSpec.map( lmrs => relativize(rb.revisionPathFinder(permalinkPathSiteRooted,lmrs)) )
+              UpdateRecord.ForDisplay( ur.timestamp, ur.description, lastMinorRevisionSpec, ur.supercededRevisionSpec, lastMinorRevisionRelative, supercededRevisionRelative )
+            case None =>  
+              UpdateRecord.ForDisplay( ur.timestamp, ur.description, None, ur.supercededRevisionSpec, None, None )
+      val firstRealUpdate = allExceptInitial.last
+      val initial = initialNoLastMinorRevision.copy( lastMinorRevisionSpec = firstRealUpdate.supercededRevisionSpec, lastMinorRevisionRelative = firstRealUpdate.supercededRevisionRelative )
+      allExceptInitial :+ initial
+    else
+      Seq(initialNoLastMinorRevision)
+
   def updateRecordsForDisplay( renderedFrom : Rooted, info : Entry.Info ) : Seq[UpdateRecord.ForDisplay] =
-    UpdateRecord.ForDisplay.fromHistory(renderedFrom,info.permalinkPathSiteRooted,this,info.updateHistory)
+    updateRecordsForDisplay(renderedFrom,info.permalinkPathSiteRooted,info.updateHistory,info.pubDate)
 
   def updateRecordsForDisplay( renderedFrom : SiteLocation, info : Entry.Info ) : Seq[UpdateRecord.ForDisplay] = updateRecordsForDisplay( renderedFrom.siteRootedPath, info )
 

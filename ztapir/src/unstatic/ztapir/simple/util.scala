@@ -19,21 +19,6 @@ object UpdateRecord:
   def apply( timestamp : String, description : Option[String], supercededVersionSpec : Option[String], tz : ZoneId = ZoneId.systemDefault() ) : UpdateRecord =
     apply( parseTimestamp(timestamp, tz).get, description, supercededVersionSpec )
 
-  object ForDisplay:
-    def fromHistory( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, blog : SimpleBlog, updateHistorySorted : immutable.SortedSet[UpdateRecord] ) : Seq[ForDisplay] =
-      def relativize( rooted : Rooted ) = renderedFrom.relativizeSibling(rooted)
-      lazy val updateRecordToLastMinorRevision = blog.nonCurrentUpdateRecordToOwnLastMinorRevisionSpec( updateHistorySorted )
-      val updateHistory = updateHistorySorted.toList
-      val current = updateHistory.head
-      updateHistory.map: ur =>
-        blog.revisionBinder match
-          case Some(rb) =>
-            val supercededRevisionRelative = ur.supercededRevisionSpec.map( srs => relativize(rb.revisionPathFinder(permalinkPathSiteRooted,srs)) )
-            val lastMinorRevisionSpec = updateRecordToLastMinorRevision.get(ur)
-            val lastMinorRevisionRelative = lastMinorRevisionSpec.map( lmrs => relativize(rb.revisionPathFinder(permalinkPathSiteRooted,lmrs)) )
-            ForDisplay( ur.timestamp, ur.description, lastMinorRevisionSpec, ur.supercededRevisionSpec, lastMinorRevisionRelative, supercededRevisionRelative )
-          case None =>  
-            ForDisplay( ur.timestamp, ur.description, None, ur.supercededRevisionSpec, None, None )
   case class ForDisplay( timestamp : Instant, description : Option[String], lastMinorRevisionSpec : Option[String], supercededRevisionSpec : Option[String], lastMinorRevisionRelative : Option[Rel], supercededRevisionRelative : Option[Rel] )
 
   given ordering : Ordering[UpdateRecord] =
