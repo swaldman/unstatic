@@ -22,6 +22,41 @@ object ZTEndpointBinding:
   trait Source:
     def endpointBindings : immutable.Seq[ZTEndpointBinding]
 
+    lazy val (effectiveEndpointBindings, nonUniqueIdentifiers) = // mutable internals not exposed
+      import scala.collection.mutable
+
+      val ebs = endpointBindings.distinct
+
+      val siteRootedPathsSeen = mutable.Set.empty[Rooted]
+      val identifiersSeen     = mutable.Set.empty[String]
+      val nascentEffective    = new mutable.ArrayBuffer[ZTEndpointBinding](ebs.size)
+      val nascentNonunique    = mutable.Set.empty[String]
+
+      ebs.foreach: binding =>
+        if !siteRootedPathsSeen.contains( binding.siteRootedPath ) then
+          siteRootedPathsSeen += binding.siteRootedPath
+          val nonuniqueIds = binding.identifiers.intersect(identifiersSeen)
+          nascentNonunique ++= nonuniqueIds
+          identifiersSeen ++= binding.identifiers
+          nascentEffective += binding
+        else
+          scribe.warn(s"Duplicate binding for site-rooted path '${binding.siteRootedPath}'. Binding will be not be included in effective bindings: ${binding}")
+
+      (nascentEffective.toVector, immutable.Set.from(nascentNonunique))
+
+    lazy val bindingByUniqueId : immutable.Map[String,ZTEndpointBinding] =
+      val tuples =
+        for
+          binding <- effectiveEndpointBindings
+          id      <- (binding.identifiers -- nonUniqueIdentifiers).toSeq
+        yield
+          ( id, binding )
+      tuples.toMap
+
+    lazy val bindingBySiteRootedPath : immutable.Map[Rooted,ZTEndpointBinding] =
+      effectiveEndpointBindings.map( b => (b.siteRootedPath, b) ).toMap
+  end Source  
+
   val IdentifierOrdering = AnyBinding.IdentifierOrdering
 
   def staticDirectoryServing( siteRootedPath: Rooted, site: ZTSite, dir : JPath, identifiers : immutable.Set[String] ) : ZTEndpointBinding.FromStaticDirectory =

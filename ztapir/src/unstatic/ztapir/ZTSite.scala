@@ -22,8 +22,7 @@ object ZTSite:
     override def endpointBindings : immutable.Seq[ZTEndpointBinding] = super.endpointBindings :+ rootBinding
   end SingleStaticRootComposite
 
-trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers:
-  override def allBindings : immutable.Seq[AnyBinding] = this.endpointBindings
+trait ZTSite extends Site, ZTEndpointBinding.Source:
 
   /**
    *  If Some(...), media-dir hash specials will be expected
@@ -39,8 +38,7 @@ trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers
    */
   val enforceUserContentFrom : Option[immutable.Seq[JPath]]
 
-  lazy val siteRootedPathByIdentifier =
-    allBindings.reverse.flatMap( b => b.identifiers.toSeq.map(id => (id, b.siteRootedPath)) ).toMap
+  def siteRootedPathByUniqueIdentifier(id : String) : Option[Rooted] = this.bindingByUniqueId.get(id).map( _.siteRootedPath )
 
   private def siteRootedPathIsDefined( siteRootedPath : Rooted, binding : ZTEndpointBinding ) : Boolean =
     binding match
@@ -141,14 +139,17 @@ trait ZTSite extends Site, ZTEndpointBinding.Source, ExposesDuplicateIdentifiers
             (content, None)
           else
             (content.substring(0,withinPageAnchorIndex), Some(content.substring(withinPageAnchorIndex+1)))
-        siteRootedPathByIdentifier.get(id) match
+        siteRootedPathByUniqueIdentifier(id) match
           case Some(path) =>
             val unanchored = sourceSiteRooted.relativizeSibling(path).toString()
             withinPageAnchor match
               case Some(wpa) => s"${unanchored}#${wpa}"
               case None      => unanchored
           case None =>
-            throw new UnresolvedReference(sourceId, href, s"Refers to identifier '${id}', but that identifier is unknown to this site.")
+            if this.nonUniqueIdentifiers(id) then
+              throw new UnresolvedReference(sourceId, href, s"Identifier '${id}' is not unique within this site, cannot be used as an anchor.")
+            else
+              throw new UnresolvedReference(sourceId, href, s"Refers to identifier '${id}', but that identifier is unknown to this site.")
             // scribe.warn(s"${sourceId}: Special hash reference '${href}' could not be interpreted or resolved to an identifier, left as-is.")
             // href
     else

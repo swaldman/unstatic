@@ -60,7 +60,7 @@ object ZTMain:
 
   def serve(site: ZTSite)(using cfg: Config.Dynamic) =
     def buildApp(endpointSource: ZTEndpointBinding.Source) =
-      val endpointBindings = endpointSource.endpointBindings
+      val endpointBindings = endpointSource.effectiveEndpointBindings
       //val endpoints = endpointBindings.map(_.ztServerEndpoint)
       if (endpointBindings.isEmpty) throw new NoEndpointsDefined(s"No endpoints defined to serve from site for ${site.sitePath}.")
 
@@ -165,7 +165,7 @@ object ZTMain:
   private def printIdentifierLine( id : String ) = Console.printLine("     \u27A3 " + id)
   private def printIdentifiers( binding : ZTEndpointBinding, site : ZTSite, cfg : Config.List ) : Task[Unit] =
     // binding identifiers are always sorted first by length (shortest first), then by String ordering
-    val byLenUids = binding.identifiers.toVector.filter(id => !site.duplicateIdentifiers(id))
+    val byLenUids = binding.identifiers.toVector.filter(id => !site.nonUniqueIdentifiers(id))
     if cfg.allIdentifiers then
       Console.printLine( "    identifiers (unique):" ) *> ZIO.foreachDiscard( byLenUids.map( printIdentifierLine ) )(identity)
     else
