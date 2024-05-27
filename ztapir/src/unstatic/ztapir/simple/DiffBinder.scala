@@ -155,6 +155,7 @@ object DiffBinder:
           tableEffect.map: table =>
             s"""|<html>
                 |  <head>
+                |    <meta charset="utf-8">
                 |    <title>${title}</title>
                 |    <style>
                 |      body { font-family: monospace; font-stretch: condensed; }
