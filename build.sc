@@ -24,6 +24,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
       val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.0.9-SNAPSHOT"
       val JGit               = ivy"org.eclipse.jgit:org.eclipse.jgit:6.9.0.202403050737-r"
       val Jsoup              = ivy"org.jsoup:jsoup:1.17.2"
+      val JavaDiffUtils      = ivy"io.github.java-diff-utils:java-diff-utils:4.12"
       val FlexmarkSeq        = Seq (
         ivy"com.vladsch.flexmark:flexmark:${FlexmarkVersion}",
         ivy"com.vladsch.flexmark:flexmark-ext-footnotes:${FlexmarkVersion}",
@@ -78,6 +79,7 @@ object unstatic extends RootModule with UnstaticBuildModule {
           Dependency.ZTapir.AudiofluidityRss,
           Dependency.ZTapir.Jsoup,
           Dependency.ZTapir.JGit,
+          Dependency.ZTapir.JavaDiffUtils,
         ) ++ Dependency.ZTapir.FlexmarkSeq
     }
   }

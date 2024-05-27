@@ -19,6 +19,8 @@ import zio.*
  *  Keys (initial elements) are site-rooted, but endpoints are server rooted!
  */
 object ZTEndpointBinding:
+  object Source:
+    final case class Trivial( endpointBindings : immutable.Seq[ZTEndpointBinding] ) extends Source
   trait Source:
     def endpointBindings : immutable.Seq[ZTEndpointBinding]
 
@@ -123,6 +125,9 @@ object ZTEndpointBinding:
     end task
     val ztServerEndpoint = publicReadOnlyUtf8Endpoint( mediaType )( siteRootedPath, site, task )
     BytesGenerable( siteRootedPath, ztServerEndpoint, task, mediaType, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
+
+  def publicReadOnlyPlaintext( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.StringGenerable =
+    StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, None, MediaType.TextPlain.charset(CharsetUTF8), CharsetUTF8, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))
 
   def publicReadOnlyHtml( siteRootedPath: Rooted, site : ZTSite, task: zio.Task[String], mediaDirSiteRooted : Option[Rooted], identifiers : immutable.Set[String]  ) : ZTEndpointBinding.StringGenerable =
     StringGenerable( siteRootedPath, publicReadOnlyUtf8HtmlEndpoint( siteRootedPath, site, task ), task, mediaDirSiteRooted, MediaType.TextHtml.charset(CharsetUTF8), CharsetUTF8, immutable.SortedSet.from(identifiers)(using IdentifierOrdering))

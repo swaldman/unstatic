@@ -258,6 +258,9 @@ trait SimpleBlog extends ZTBlog:
   // you can override this
   val revisionBinder : Option[RevisionBinder] = None
 
+  // you can override this, but in only has effect if some revisionBinder is set as well
+  val diffBinder : Option[DiffBinder] = None
+
   /**
    * Filter the index of your untemplates for the blog's entries
    */
@@ -375,10 +378,13 @@ trait SimpleBlog extends ZTBlog:
     layoutPage( layoutPageInput )
 
   def nonCurrentUpdateRecordToOwnLastMinorRevisionSpec( updateHistory : immutable.SortedSet[UpdateRecord] ) : Map[UpdateRecord,String] =
-    val uhl = updateHistory.toList
-    uhl.tail.zip(uhl)
-      .collect { case (ur, UpdateRecord(_,_,Some(lastCurrentVersionSpec))) => (ur, lastCurrentVersionSpec) }
-      .toMap
+    if updateHistory.nonEmpty then
+      val uhl = updateHistory.toList
+      uhl.tail.zip(uhl)
+        .collect { case (ur, UpdateRecord(_,_,Some(lastCurrentVersionSpec))) => (ur, lastCurrentVersionSpec) }
+        .toMap
+    else
+      Map.empty
 
   // you can override this
   def renderMultiplePrologue : String = ""
@@ -412,3 +418,33 @@ trait SimpleBlog extends ZTBlog:
           .flatMap( er => er.entryInfo.updateHistory.toList.map( ur => (er.entryInfo.permalinkPathSiteRooted, ur ) ) )
           .collect { case ( ppsr, UpdateRecord(_, _, Some( revisionSpec ) ) ) => rb.revisionEndpointBinding(revisionSpec,ppsr,"text/html", immutable.Set.empty) }
     (basicBindings ++ pastRevisionBindings) :+ mainRssBinding
+
+    val stage0 = ZTEndpointBinding.Source.Trivial( (basicBindings ++ pastRevisionBindings) :+ mainRssBinding )
+
+    val diffPrerequesites : Option[Tuple2[RevisionBinder.RevisionPathFinder,DiffBinder]] =
+      for
+        _revisionBinder <- this.revisionBinder
+        _diffBinder <- this.diffBinder
+      yield
+        Tuple2( _revisionBinder.revisionPathFinder, _diffBinder )
+
+    val withDiffs =
+      diffPrerequesites match
+        case Some( Tuple2( rpf, db ) ) =>
+          val diffTuples =
+            entriesResolved.toList.flatMap: entry =>
+              val noncurrent =
+                nonCurrentUpdateRecordToOwnLastMinorRevisionSpec(entry.entryInfo.updateHistory).toList
+                  .collect { case Tuple2( UpdateRecord(_, _, Some(srs)), lmrs ) => ( entry.entryInfo.permalinkPathSiteRooted, srs, Some(lmrs) ) }
+              val current = entry.entryInfo.updateHistory.headOption.flatMap( _.supercededRevisionSpec ).map( srs => (entry.entryInfo.permalinkPathSiteRooted, srs, None) )
+              noncurrent ++ current
+          val sourceBindingBySiteRootedPath : Rooted => ZTEndpointBinding = rooted => stage0.bindingBySiteRootedPath(rooted) 
+          val diffBindings =
+            diffTuples.map: tup =>
+              val ( origSiteRootedPath, before, after ) = tup
+              db.diffEndpointBinding( sourceBindingBySiteRootedPath, rpf, origSiteRootedPath, before, after, Set.empty )
+          stage0.endpointBindings ++ diffBindings    
+        case None =>
+          stage0.endpointBindings
+          
+    withDiffs
