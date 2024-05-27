@@ -19,7 +19,15 @@ object UpdateRecord:
   def apply( timestamp : String, description : Option[String], supercededVersionSpec : Option[String], tz : ZoneId = ZoneId.systemDefault() ) : UpdateRecord =
     apply( parseTimestamp(timestamp, tz).get, description, supercededVersionSpec )
 
-  case class ForDisplay( timestamp : Instant, description : Option[String], lastMinorRevisionSpec : Option[String], supercededRevisionSpec : Option[String], lastMinorRevisionRelative : Option[Rel], supercededRevisionRelative : Option[Rel] )
+  case class ForDisplay(
+    timestamp : Instant,
+    description : Option[String],
+    finalMinorRevisionSpec : Option[String],
+    supercededRevisionSpec : Option[String],
+    finalMinorRevisionRelative : Option[Rel],
+    supercededRevisionRelative : Option[Rel],
+    diffRelative : Option[Rel]
+  )
 
   given ordering : Ordering[UpdateRecord] =
     Ordering.by( (ur : UpdateRecord) => (ur.timestamp,ur.description,ur.supercededRevisionSpec) ).reverse

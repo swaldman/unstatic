@@ -286,10 +286,10 @@ trait SimpleBlog extends ZTBlog:
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant ) : Seq[UpdateRecord.ForDisplay] =
-    val initialNoLastMinorRevision = UpdateRecord.ForDisplay( initialPubDate, Some("Initial publication."), None, None, None, None )
+    val initialNoLatestMinorRevision = UpdateRecord.ForDisplay( initialPubDate, Some("Initial publication."), None, None, None, None, None )
     if updateHistorySorted.nonEmpty then
       def relativize( rooted : Rooted ) = renderedFrom.relativizeSibling(rooted)
-      lazy val updateRecordToLastMinorRevision = nonCurrentUpdateRecordToOwnLastMinorRevisionSpec( updateHistorySorted )
+      lazy val updateRecordToLatestMinorRevision = nonCurrentUpdateRecordToOwnLatestMinorRevisionSpec( updateHistorySorted )
       val updateHistory = updateHistorySorted.toVector
       val current = updateHistory.head
       val allExceptInitial =
@@ -297,16 +297,22 @@ trait SimpleBlog extends ZTBlog:
           this.revisionBinder match
             case Some(rb) =>
               val supercededRevisionRelative = ur.supercededRevisionSpec.map( srs => relativize(rb.revisionPathFinder(permalinkPathSiteRooted,srs)) )
-              val lastMinorRevisionSpec = updateRecordToLastMinorRevision.get(ur)
-              val lastMinorRevisionRelative = lastMinorRevisionSpec.map( lmrs => relativize(rb.revisionPathFinder(permalinkPathSiteRooted,lmrs)) )
-              UpdateRecord.ForDisplay( ur.timestamp, ur.description, lastMinorRevisionSpec, ur.supercededRevisionSpec, lastMinorRevisionRelative, supercededRevisionRelative )
+              val finalMinorRevisionSpec = updateRecordToLatestMinorRevision.get(ur)
+              val finalMinorRevisionRelative = finalMinorRevisionSpec.map( lmrs => relativize(rb.revisionPathFinder(permalinkPathSiteRooted,lmrs)) )
+              val diffRel =
+                for
+                  db <- diffBinder
+                  srs <- ur.supercededRevisionSpec
+                yield
+                  relativize(db.diffPathFinder(permalinkPathSiteRooted,srs,finalMinorRevisionSpec))
+              UpdateRecord.ForDisplay( ur.timestamp, ur.description, finalMinorRevisionSpec, ur.supercededRevisionSpec, finalMinorRevisionRelative, supercededRevisionRelative, diffRel )
             case None =>  
-              UpdateRecord.ForDisplay( ur.timestamp, ur.description, None, ur.supercededRevisionSpec, None, None )
+              UpdateRecord.ForDisplay( ur.timestamp, ur.description, None, ur.supercededRevisionSpec, None, None, None )
       val firstRealUpdate = allExceptInitial.last
-      val initial = initialNoLastMinorRevision.copy( lastMinorRevisionSpec = firstRealUpdate.supercededRevisionSpec, lastMinorRevisionRelative = firstRealUpdate.supercededRevisionRelative )
+      val initial = initialNoLatestMinorRevision.copy( finalMinorRevisionSpec = firstRealUpdate.supercededRevisionSpec, finalMinorRevisionRelative = firstRealUpdate.supercededRevisionRelative )
       allExceptInitial :+ initial
     else
-      Seq(initialNoLastMinorRevision)
+      Seq(initialNoLatestMinorRevision)
 
   def updateRecordsForDisplay( renderedFrom : Rooted, info : Entry.Info ) : Seq[UpdateRecord.ForDisplay] =
     updateRecordsForDisplay(renderedFrom,info.permalinkPathSiteRooted,info.updateHistory,info.pubDate)
@@ -377,7 +383,7 @@ trait SimpleBlog extends ZTBlog:
     val layoutPageInput = Layout.Input.Page(this, site, renderLocation, entry, immutable.Seq(resolved))
     layoutPage( layoutPageInput )
 
-  def nonCurrentUpdateRecordToOwnLastMinorRevisionSpec( updateHistory : immutable.SortedSet[UpdateRecord] ) : Map[UpdateRecord,String] =
+  def nonCurrentUpdateRecordToOwnLatestMinorRevisionSpec( updateHistory : immutable.SortedSet[UpdateRecord] ) : Map[UpdateRecord,String] =
     if updateHistory.nonEmpty then
       val uhl = updateHistory.toList
       uhl.tail.zip(uhl)
@@ -434,7 +440,7 @@ trait SimpleBlog extends ZTBlog:
           val diffTuples =
             entriesResolved.toList.flatMap: entry =>
               val noncurrent =
-                nonCurrentUpdateRecordToOwnLastMinorRevisionSpec(entry.entryInfo.updateHistory).toList
+                nonCurrentUpdateRecordToOwnLatestMinorRevisionSpec(entry.entryInfo.updateHistory).toList
                   .collect { case Tuple2( UpdateRecord(_, _, Some(srs)), lmrs ) => ( entry.entryInfo.permalinkPathSiteRooted, srs, Some(lmrs) ) }
               val current = entry.entryInfo.updateHistory.headOption.flatMap( _.supercededRevisionSpec ).map( srs => (entry.entryInfo.permalinkPathSiteRooted, srs, None) )
               noncurrent ++ current
