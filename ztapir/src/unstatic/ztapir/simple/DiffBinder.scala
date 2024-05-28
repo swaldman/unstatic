@@ -15,6 +15,7 @@ import unstatic.UnstaticException
 import java.nio.charset.StandardCharsets
 
 import com.github.difflib.text.*
+import scala.annotation.tailrec
 
 object DiffBinder:
   object DiffPathFinder:
@@ -85,6 +86,8 @@ object DiffBinder:
           ( diffRow.getTag(), lineno, diffRow.getOldLine(), diffRow.getNewLine() )
 
         type RowTup = Tuple4[DiffRow.Tag, Int, String, String]
+
+        @tailrec
         def replaceLongEqualsSpans( unprocessed : Vector[RowTup], accum : Vector[RowTup | None.type] ) : Vector[RowTup | None.type] =
           unprocessed.headOption.map( _(0) ) match
             case None => accum
