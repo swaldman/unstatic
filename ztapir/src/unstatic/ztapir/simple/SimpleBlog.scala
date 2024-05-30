@@ -102,7 +102,6 @@ object SimpleBlog:
     def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
       makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved )
 
-    // we now resort candidateEntriesResolved
     def makeFeed( blog : SimpleBlog )(
       itemable                 : Itemable[blog.EntryResolved],
       maxEntries               : Option[Int],
@@ -142,6 +141,19 @@ object SimpleBlog:
           val completeness = Element.Iffy.Completeness( completenessValue )
           tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
         Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
+
+    def makeSproutFeed( blog : SimpleBlog )(
+      sprout                   : blog.EntryResolved,
+      maxEntries               : Option[Int],
+      onlySince                : Option[Instant],
+      channelSpec              : Element.Channel.Spec,
+      rssNamespaces            : List[Namespace],
+      extraChannelChildren     : List[Element[?]]     = Nil,
+      extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
+      extraRssChildren         : List[Element[?]]     = Nil,
+      extraRssChildrenRaw      : List[scala.xml.Elem] = Nil
+    ) : Element.Rss = ???
+
   end Rss
 end SimpleBlog
 
