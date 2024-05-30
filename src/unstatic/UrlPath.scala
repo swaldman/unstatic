@@ -54,6 +54,7 @@ object UrlPath:
       val shared = this.elements.zip(other.elements).takeWhile(tup => tup(0) == tup(1)).map(_(0))
       Rel( Array.fill(elements.length - shared.length)("..").to(Vector) ++ other.elements.drop(shared.length), other.isDir )
     def relativizeSibling( other : T ) : UrlPath.Rel = this.parent.relativize(other)
+    def relativizeFromNearestDir( other : T ) : UrlPath.Rel = if (this.isDir) relativize(other) else relativizeSibling(other)
     def embedRoot(rooted : UrlPath.Rooted) : T = resolve(rooted.unroot)
     def canonical : T =
       val elements = _dedottifySuffix( this.elements )

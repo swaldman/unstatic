@@ -22,6 +22,11 @@ object SimpleBlog:
       val lastSpace = tmp.lastIndexOf(' ')
       (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
 
+    private def absolutizedHtmlSummary(blog : SimpleBlog)( permalinkRelativeHtml : String, absPermalink : Abs ) : (String, String) =
+        val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
+        mutateResolveRelativeUrls(jsoupDoc)
+        (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc,blog.defaultSummaryAsDescriptionMaxLen)) 
+
     def rssItem( blog : SimpleBlog )(
       resolved : blog.EntryResolved,
       fullContent : Boolean,
@@ -29,12 +34,8 @@ object SimpleBlog:
       extraChildrenRaw : List[scala.xml.Elem] = Nil
     ) : Element.Item =
       val entryInfo = resolved.entryInfo
-      val absPermalink = blog.site.absFromSiteRooted(entryInfo.permalinkPathSiteRooted)
       val permalinkRelativeHtml = blog.renderSingleFragment(blog.SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, blog.Entry.Presentation.Rss)
-      val (absolutizedHtml, summary) =
-        val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
-        mutateResolveRelativeUrls(jsoupDoc)
-        (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc,blog.defaultSummaryAsDescriptionMaxLen))
+      val (absolutizedHtml, summary) = absolutizedHtmlSummary(blog)( permalinkRelativeHtml, entryInfo.absPermalink )
       val authorsString : Option[String] =
         entryInfo.authors.length match
           case 0 => None
@@ -48,8 +49,8 @@ object SimpleBlog:
       val mbDcCreatorElem =
         authorsString.map( as => Element.DublinCore.Creator( as ) )
       val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
-      val linkElement = Element.Link(absPermalink.toString)
-      val guidElement = Element.Guid(isPermalink = true, absPermalink.toString)
+      val linkElement = Element.Link(entryInfo.absPermalink.toString)
+      val guidElement = Element.Guid(isPermalink = true, entryInfo.absPermalink.toString)
 
       val standardItem =
         Element.Item(
@@ -142,6 +143,8 @@ object SimpleBlog:
           tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
         Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
 
+    def sproutSuffix( timestamp : Instant ) : String = ???
+
     def makeSproutFeed( blog : SimpleBlog )(
       sprout                   : blog.EntryResolved,
       maxEntries               : Option[Int],
@@ -152,7 +155,12 @@ object SimpleBlog:
       extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
       extraRssChildren         : List[Element[?]]     = Nil,
       extraRssChildrenRaw      : List[scala.xml.Elem] = Nil
-    ) : Element.Rss = ???
+    ) : Element.Rss =
+      // absolutizedHtmlSummary( permalinkRelativeHtml : String, absPermalink : Abs ) : (String, String)
+      val baseItem =
+        ???
+      val updates = blog.updateRecordsForDisplayFromSiteRoot(sprout.entryInfo)
+      ???
 
   end Rss
 end SimpleBlog
@@ -171,10 +179,14 @@ trait SimpleBlog extends ZTBlog:
       pubDate : Instant,
       updateHistory : immutable.SortedSet[UpdateRecord],
       sprout : Boolean,
+      mbAnchor : Option[String],
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
-    )
+    ):
+      val absPermalink = site.absFromSiteRooted(permalinkPathSiteRooted)
+
+
     final case class Input (
       blog : SimpleBlog,
       site : Site, // duplicative, since it's accessible from SiteLocations. But easy
@@ -289,17 +301,18 @@ trait SimpleBlog extends ZTBlog:
     val pubDate                   = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
     val updateHistory             = Key.`UpdateHistory`.caseInsensitiveCheck(template).getOrElse( immutable.SortedSet.empty[UpdateRecord] )
     val sprout                    = Key.`Sprout`.caseInsensitiveCheck(template).getOrElse( false )
+    val mbAnchor                  = Key.`Anchor`.caseInsensitiveCheck(template)
     val contentType               = normalizeContentType( findContentType( template ) )
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, sprout, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, sprout, mbAnchor, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant ) : Seq[UpdateRecord.ForDisplay] =
     val initialNoLatestMinorRevision = UpdateRecord.ForDisplay( initialPubDate, Some("Initial publication."), None, None, None, None, None )
     if updateHistorySorted.nonEmpty then
-      def relativize( rooted : Rooted ) = renderedFrom.relativizeSibling(rooted)
+      def relativize( rooted : Rooted ) = renderedFrom.relativizeFromNearestDir(rooted)
       lazy val updateRecordToLatestMinorRevision = nonCurrentUpdateRecordToOwnLatestMinorRevisionSpec( updateHistorySorted )
       val updateHistory = updateHistorySorted.toVector
       val current = updateHistory.head
@@ -324,6 +337,8 @@ trait SimpleBlog extends ZTBlog:
       allExceptInitial :+ initial
     else
       Seq(initialNoLatestMinorRevision)
+
+  def updateRecordsForDisplayFromSiteRoot( info : Entry.Info ) = updateRecordsForDisplay( Rooted.root, info )
 
   def updateRecordsForDisplay( renderedFrom : Rooted, info : Entry.Info ) : Seq[UpdateRecord.ForDisplay] =
     updateRecordsForDisplay(renderedFrom,info.permalinkPathSiteRooted,info.updateHistory,info.pubDate)
