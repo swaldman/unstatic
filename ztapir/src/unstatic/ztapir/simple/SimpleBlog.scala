@@ -170,6 +170,7 @@ trait SimpleBlog extends ZTBlog:
       tags : Seq[String],
       pubDate : Instant,
       updateHistory : immutable.SortedSet[UpdateRecord],
+      sprout : Boolean,
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
@@ -287,11 +288,12 @@ trait SimpleBlog extends ZTBlog:
     val tags                      = Key.`Tag`.caseInsensitiveCheck(template).getOrElse(Nil)
     val pubDate                   = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
     val updateHistory             = Key.`UpdateHistory`.caseInsensitiveCheck(template).getOrElse( immutable.SortedSet.empty[UpdateRecord] )
+    val sprout                    = Key.`Sprout`.caseInsensitiveCheck(template).getOrElse( false )
     val contentType               = normalizeContentType( findContentType( template ) )
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, sprout, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant ) : Seq[UpdateRecord.ForDisplay] =
