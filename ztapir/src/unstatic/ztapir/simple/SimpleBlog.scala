@@ -170,7 +170,6 @@ trait SimpleBlog extends ZTBlog:
       tags : Seq[String],
       pubDate : Instant,
       updateHistory : immutable.SortedSet[UpdateRecord],
-      mbPriorRevisionSiteRooted : Option[Rooted],
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
@@ -292,9 +291,7 @@ trait SimpleBlog extends ZTBlog:
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    val mbPriorRevisionSiteRooted = priorRevisionSiteRooted(updateHistory, permalinkSiteRooted)
-
-    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, mbPriorRevisionSiteRooted, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant ) : Seq[UpdateRecord.ForDisplay] =
@@ -332,6 +329,8 @@ trait SimpleBlog extends ZTBlog:
   def updateRecordsForDisplay( renderedFrom : SiteLocation, info : Entry.Info ) : Seq[UpdateRecord.ForDisplay] = updateRecordsForDisplay( renderedFrom.siteRootedPath, info )
 
   def updateRecordsForDisplay( layoutInputEntry : Layout.Input.Entry ) : Seq[UpdateRecord.ForDisplay] = updateRecordsForDisplay( layoutInputEntry.renderLocation, layoutInputEntry.info )
+
+  def priorRevisionSiteRooted( info : Entry.Info ) : Option[Rooted] = priorRevisionSiteRooted( info.updateHistory, info.permalinkPathSiteRooted )
 
   def priorRevisionSiteRooted( updateHistory : immutable.SortedSet[UpdateRecord], permalinkPathSiteRooted : Rooted ) : Option[Rooted] =
     updateHistory.headOption.flatMap( ur => priorRevisionSiteRooted( ur, permalinkPathSiteRooted ) )
