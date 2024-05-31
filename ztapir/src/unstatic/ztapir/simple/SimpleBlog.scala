@@ -23,9 +23,24 @@ object SimpleBlog:
       (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
 
     private def absolutizedHtmlSummary(blog : SimpleBlog)( permalinkRelativeHtml : String, absPermalink : Abs ) : (String, String) =
-        val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
-        mutateResolveRelativeUrls(jsoupDoc)
-        (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc,blog.defaultSummaryAsDescriptionMaxLen)) 
+      val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
+      mutateResolveRelativeUrls(jsoupDoc)
+      (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc,blog.defaultSummaryAsDescriptionMaxLen))
+
+    private def authorElementMbCreatorElement( authorSeq : Seq[String] ) : (Element.Author, Option[Element.DublinCore.Creator]) =
+      val authorsString : Option[String] =
+        authorSeq.length match
+          case 0 => None
+          case 1 => Some( authorSeq.head )
+          case 2 => Some( authorSeq.head + " and " + authorSeq.last )
+          case n =>
+            val anded = authorSeq.init :+ s"and ${authorSeq.last}"
+            Some( anded.mkString(", ") )
+      val nospamAuthorElem =
+        Element.Author( authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})") )
+      val mbDcCreatorElem =
+        authorsString.map( as => Element.DublinCore.Creator( as ) )
+      ( nospamAuthorElem, mbDcCreatorElem )  
 
     def rssItem( blog : SimpleBlog )(
       resolved : blog.EntryResolved,
@@ -36,18 +51,7 @@ object SimpleBlog:
       val entryInfo = resolved.entryInfo
       val permalinkRelativeHtml = blog.renderSingleFragment(blog.SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, blog.Entry.Presentation.Rss)
       val (absolutizedHtml, summary) = absolutizedHtmlSummary(blog)( permalinkRelativeHtml, entryInfo.absPermalink )
-      val authorsString : Option[String] =
-        entryInfo.authors.length match
-          case 0 => None
-          case 1 => Some( entryInfo.authors.head )
-          case 2 => Some( entryInfo.authors.head + " and " + entryInfo.authors.last )
-          case n =>
-            val anded = entryInfo.authors.init :+ s"and ${entryInfo.authors.last}"
-            Some( anded.mkString(", ") )
-      val nospamAuthor =
-        authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})")
-      val mbDcCreatorElem =
-        authorsString.map( as => Element.DublinCore.Creator( as ) )
+      val (authorElement, mbCreatorElement) = authorElementMbCreatorElement( entryInfo.authors )
       val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
       val linkElement = Element.Link(entryInfo.absPermalink.toString)
       val guidElement = Element.Guid(isPermalink = true, entryInfo.absPermalink.toString)
@@ -57,7 +61,7 @@ object SimpleBlog:
           title = mbTitleElement,
           link = Some(linkElement),
           description = Some(Element.Description(summary)),
-          author = Some(Element.Author(nospamAuthor)),
+          author = Some(authorElement),
           categories = Nil,
           comments = None,
           enclosure = None,
@@ -66,7 +70,7 @@ object SimpleBlog:
           source = None
         )
       val baseItem =
-        val withCreator = mbDcCreatorElem.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
+        val withCreator = mbCreatorElement.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
         val withUpdated = entryInfo.updateHistory.headOption.fold( withCreator )( ur => withCreator.withExtra( Element.Atom.Updated( ur.timestamp ) ) )
         val withFullContent = if fullContent then withUpdated.withExtra(Element.Content.Encoded(absolutizedHtml)) else withUpdated
         withFullContent
