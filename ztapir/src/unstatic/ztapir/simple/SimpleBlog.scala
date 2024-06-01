@@ -10,6 +10,7 @@ import unstatic.ztapir.*
 import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 
 import com.mchange.conveniences.boolean.*
+import unstatic.ztapir.simple.SimpleBlog.Rss.makeSproutFeed
 
 object SimpleBlog:
   object Htmlifier:
@@ -88,9 +89,9 @@ object SimpleBlog:
         generator          = Some( "https://github.com/swaldman/unstatic" ),
       )
 
-    def atomLinkChannelExtra( blog : SimpleBlog ) : Element.Atom.Link =
+    def atomLinkChannelExtra( absUrl : Abs ) : Element.Atom.Link =
       Element.Atom.Link(
-        href = blog.rssFeed.absolutePath.toString(),
+        href = absUrl.toString(),
         rel = Some(Element.Atom.LinkRelation.self),
         `type` = Some("application/rss+xml")
       )
@@ -136,7 +137,7 @@ object SimpleBlog:
             case (None,None) =>
               candidateEntriesResolved
         val channel =
-          val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog) )
+          val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.rssFeed.absolutePath) )
           val completenessValue =
             if tmp.items.forall( _.guid.nonEmpty ) then
               if blog.fullContentFeed then
@@ -153,10 +154,7 @@ object SimpleBlog:
 
     def makeSproutFeed( blog : SimpleBlog )(
       sprout                   : blog.EntryResolved,
-      maxEntries               : Option[Int],
-      onlySince                : Option[Instant],
-      channelSpec              : Element.Channel.Spec,
-      rssNamespaces            : List[Namespace],
+      rssNamespaces            : List[Namespace]      = DefaultRssNamespaces,
       extraChannelChildren     : List[Element[?]]     = Nil,
       extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
       extraRssChildren         : List[Element[?]]     = Nil,
@@ -166,27 +164,36 @@ object SimpleBlog:
       // absolutizedHtmlSummary( permalinkRelativeHtml : String, absPermalink : Abs ) : (String, String)
       val info = sprout.entryInfo
       val updates = blog.updateRecordsForDisplayFromSiteRoot(info)
-      val guidBase =
-        info.absPermalink.path.elements.lastOption match
-          case None => info.absPermalink.resolve("sprout").toString()
-          case Some(fn) =>
-            val lastDot = fn.lastIndexOf('.')
-            val modfn = if lastDot >= 0 then fn.substring(0, lastDot) else fn
-            info.absPermalink.resolveSibling( modfn + "_sprout" ).toString
+      val guidBase = info.sproutBaseAbs.toString
 
-      def descElement(urfd : UpdateRecord.ForDisplay) = Element.Description( urfd.description.getOrElse(s"New major update, ${blog.dateTimeFormatter.format(urfd.timestamp)}") )
+      def descElementContentEncodedElement(urfd : UpdateRecord.ForDisplay) =
+        val descHeadline = s"""[Update — ${blog.dateTimeFormatter.format(urfd.timestamp)}] ${urfd.description.getOrElse(s"New major update.")}"""
+        def liElem( link : Abs, text : String ) = s"""<li><a href="${link}">${text}</a></li>"""
+        val contentHtml =
+          s"""|<p>${descHeadline}</p>
+              |
+              |<ul>
+              |${urfd.finalMinorRevisionRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold("")(abs => liElem(abs, "This revision"))}
+              |${urfd.diffRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold("")(abs => liElem(abs, "Diff from prior revision"))}
+              |<li><a href="${info.absPermalink}">Current revision</a> <em>(may be newer than the revision announced here!)</em></li>
+              |</ul>""".stripMargin
+        ( Element.Description( descHeadline ), Element.Content.Encoded(contentHtml) )
+      def _authorElementMbCreatorElement( urfd : UpdateRecord.ForDisplay ) : (Element.Author, Option[Element.DublinCore.Creator]) =
+        authorElementMbCreatorElement( urfd.revisionAuthors.getOrElse(info.authors) )
+
       val (revisions, base) = ( updates.init, updates.last ) // would splitAt be more efficient?
       val baseItem =
         val baseUnfinished = revisions.isEmpty
         val titleTag = baseUnfinished.tf("Working Draft")("Seed")
         val linkElement = Element.Link(base.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
-        val (authorElement, mbCreatorElement) = authorElementMbCreatorElement( info.authors )
         val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( info.pubDate ) )
+        val (de, cee) = descElementContentEncodedElement(base)
+        val (authorElement, mbCreatorElement) = _authorElementMbCreatorElement( base )
         val baseBase =
           Element.Item(
             title = info.mbTitle.map( title => Element.Title( s"[${titleTag}] ${title}" ) ),
             link = Some(linkElement),
-            description = Some(descElement(base)),
+            description = Some(de),
             author = Some(authorElement),
             categories = Nil,
             comments = None,
@@ -194,9 +201,49 @@ object SimpleBlog:
             guid = Some(guidElement),
             pubDate = Some(Element.PubDate(info.pubDate.atZone(blog.timeZone))),
             source = None
-          )
-        mbCreatorElement.fold( baseBase )( creator => baseBase.withExtra( creator ) )  
-      ???
+          ).withExtra(cee)
+        mbCreatorElement.fold( baseBase )( creator => baseBase.withExtra( creator ) )
+      def updateItem(urfd : UpdateRecord.ForDisplay, unfinished : Boolean ) =
+        val titleTag = unfinished.tf("Working Draft")("Update")
+        val linkElement = Element.Link(urfd.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
+        val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( urfd.timestamp ) )
+        val (de, cee) = descElementContentEncodedElement(urfd)
+        val (authorElement, mbCreatorElement) = _authorElementMbCreatorElement( urfd )
+        val updateBase = 
+          Element.Item(
+            title = info.mbTitle.map( title => Element.Title( s"[${titleTag}] ${title}" ) ),
+            link = Some(linkElement),
+            description = Some(de),
+            author = Some(authorElement),
+            categories = Nil,
+            comments = None,
+            enclosure = None,
+            guid = Some(guidElement),
+            pubDate = Some(Element.PubDate(urfd.timestamp.atZone(blog.timeZone))),
+            source = None
+          ).withExtra( cee )
+        mbCreatorElement.fold( updateBase )( creator => updateBase.withExtra( creator ) )
+      val items =
+        val revItems = if revisions.nonEmpty then updateItem( revisions.head, true ) +: revisions.tail.map( urfd => updateItem(urfd, false) ) else Nil
+        revItems :+ baseItem
+      val channelSpec =
+        val whatsThis = info.mbTitle.getOrElse(info.absPermalink.toString)
+        val title = "Sprout — " + whatsThis
+        Element.Channel.Spec (
+          title              = title,
+          linkUrl            = info.absPermalink.toString,
+          description        = "Updates to " + whatsThis,
+          language           = Some( blog.language ),
+          lastBuildDate      = Some( ZonedDateTime.now(blog.timeZone) ),
+          generator          = Some( "https://github.com/swaldman/unstatic" ),
+        )
+      val channel =
+        val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(info.sproutFeedSiteRooted)) )
+        val completenessValue = Element.Iffy.Completeness.Value.Metadata
+        val completeness = Element.Iffy.Completeness( completenessValue )
+        tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
+      Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
+    end makeSproutFeed
 
   end Rss
 end SimpleBlog
@@ -211,6 +258,7 @@ trait SimpleBlog extends ZTBlog:
     final case class Info (
       mbTitle : Option[String],
       authors : Seq[String],
+      mbInitialAuthors : Option[Seq[String]],
       tags : Seq[String],
       pubDate : Instant,
       updateHistory : immutable.SortedSet[UpdateRecord],
@@ -221,8 +269,23 @@ trait SimpleBlog extends ZTBlog:
       permalinkPathSiteRooted : Rooted // from Site root
     ):
       val absPermalink = site.absFromSiteRooted(permalinkPathSiteRooted)
-
-
+      private lazy val sproutBaseSiteRooted =
+        permalinkPathSiteRooted.elements.lastOption match
+          case None =>
+            Rooted.root.resolve("sprout") // shouldn't happen, since our permalinks should never be directories or roots, but...
+          case Some(fn) =>
+            val lastDot = fn.lastIndexOf('.')
+            val modfn = if lastDot >= 0 then fn.substring(0, lastDot) else fn
+            permalinkPathSiteRooted.resolveSibling( modfn + "-sprout" )
+      lazy val sproutBaseAbs =
+        site.absFromSiteRooted( sproutBaseSiteRooted )
+      lazy val sproutFeedSiteRooted =
+        sproutBaseSiteRooted.elements.lastOption match
+          case None =>
+            throw new AssertionError( "sproutBaseSiteRooted should never be merely root: " + sproutBaseSiteRooted )
+          case Some( sproutBaseName ) =>
+            sproutBaseSiteRooted.resolveSibling( sproutBaseName + ".rss" )
+    end Info
     final case class Input (
       blog : SimpleBlog,
       site : Site, // duplicative, since it's accessible from SiteLocations. But easy
@@ -232,6 +295,7 @@ trait SimpleBlog extends ZTBlog:
       presentation : Entry.Presentation
     ):
       def entryById( id : String ) : EntryResolved = SimpleBlog.this.entryById(id)
+    end Input
   end Entry
 
   object Layout:
@@ -268,7 +332,7 @@ trait SimpleBlog extends ZTBlog:
   lazy val feed          : Element.Rss              = SimpleBlog.Rss.makeDefaultFeed( this )
   lazy val feedToXmlSpec : Element.ToXml.Spec       = SimpleBlog.Rss.DefaultFeedToXmlSpec
   lazy val feedXml       : String                   = feed.asXmlText(feedToXmlSpec)
-  lazy val feedBytes     : immutable.ArraySeq[Byte] = immutable.ArraySeq.unsafeWrapArray( feedXml.getBytes(CharsetUTF8) )
+  lazy val feedBytes     : immutable.ArraySeq[Byte] = feed.bytes
 
   private val DefaultHtmlifierForContentType = immutable.Map[String,Htmlifier] (
     "text/html"     -> Htmlifier.identity,
@@ -333,6 +397,7 @@ trait SimpleBlog extends ZTBlog:
 
     val mbTitle                   = Key.`Title`.caseInsensitiveCheck(template)
     val authors                   = Key.`Author`.caseInsensitiveCheck(template).getOrElse(defaultAuthors)
+    val mbInitialAuthors            = Key.`InitialAuthor`.caseInsensitiveCheck(template)
     val tags                      = Key.`Tag`.caseInsensitiveCheck(template).getOrElse(Nil)
     val pubDate                   = Key.`PubDate`.caseInsensitiveCheck(template).getOrElse( throw missingAttribute( template, Key.`PubDate`) )
     val updateHistory             = Key.`UpdateHistory`.caseInsensitiveCheck(template).getOrElse( immutable.SortedSet.empty[UpdateRecord] )
@@ -342,11 +407,11 @@ trait SimpleBlog extends ZTBlog:
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, tags, pubDate, updateHistory, sprout, mbAnchor, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
-  private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant ) : Seq[UpdateRecord.ForDisplay] =
-    val initialNoLatestMinorRevision = UpdateRecord.ForDisplay( initialPubDate, Some("Initial publication."), None, None, None, None, None )
+  private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant, mbInitialAuthors : Option[Seq[String]] ) : Seq[UpdateRecord.ForDisplay] =
+    val initialNoLatestMinorRevision = UpdateRecord.ForDisplay( initialPubDate, Some("Initial publication."), None, None, None, None, None, mbInitialAuthors )
     if updateHistorySorted.nonEmpty then
       def relativize( rooted : Rooted ) = renderedFrom.relativizeFromNearestDir(rooted)
       lazy val updateRecordToLatestMinorRevision = nonCurrentUpdateRecordToOwnLatestMinorRevisionSpec( updateHistorySorted )
@@ -365,9 +430,9 @@ trait SimpleBlog extends ZTBlog:
                   srs <- ur.supercededRevisionSpec
                 yield
                   relativize(db.diffPathFinder(permalinkPathSiteRooted,srs,finalMinorRevisionSpec))
-              UpdateRecord.ForDisplay( ur.timestamp, ur.description, finalMinorRevisionSpec, ur.supercededRevisionSpec, finalMinorRevisionRelative, supercededRevisionRelative, diffRel )
-            case None =>  
-              UpdateRecord.ForDisplay( ur.timestamp, ur.description, None, ur.supercededRevisionSpec, None, None, None )
+              UpdateRecord.ForDisplay( ur.timestamp, ur.description, finalMinorRevisionSpec, ur.supercededRevisionSpec, finalMinorRevisionRelative, supercededRevisionRelative, diffRel, ur.revisionAuthors )
+            case None =>
+              UpdateRecord.ForDisplay( ur.timestamp, ur.description, None, ur.supercededRevisionSpec, None, None, None, ur.revisionAuthors )
       val firstRealUpdate = allExceptInitial.last
       val initial = initialNoLatestMinorRevision.copy( finalMinorRevisionSpec = firstRealUpdate.supercededRevisionSpec, finalMinorRevisionRelative = firstRealUpdate.supercededRevisionRelative )
       allExceptInitial :+ initial
@@ -377,7 +442,7 @@ trait SimpleBlog extends ZTBlog:
   def updateRecordsForDisplayFromSiteRoot( info : Entry.Info ) = updateRecordsForDisplay( Rooted.root, info )
 
   def updateRecordsForDisplay( renderedFrom : Rooted, info : Entry.Info ) : Seq[UpdateRecord.ForDisplay] =
-    updateRecordsForDisplay(renderedFrom,info.permalinkPathSiteRooted,info.updateHistory,info.pubDate)
+    updateRecordsForDisplay(renderedFrom,info.permalinkPathSiteRooted,info.updateHistory,info.pubDate,info.mbInitialAuthors)
 
   def updateRecordsForDisplay( renderedFrom : SiteLocation, info : Entry.Info ) : Seq[UpdateRecord.ForDisplay] = updateRecordsForDisplay( renderedFrom.siteRootedPath, info )
 
@@ -451,7 +516,7 @@ trait SimpleBlog extends ZTBlog:
     if updateHistory.nonEmpty then
       val uhl = updateHistory.toList
       uhl.tail.zip(uhl)
-        .collect { case (ur, UpdateRecord(_,_,Some(lastCurrentVersionSpec))) => (ur, lastCurrentVersionSpec) }
+        .collect { case (ur, UpdateRecord(_,_,Some(lastCurrentVersionSpec),_)) => (ur, lastCurrentVersionSpec) }
         .toMap
     else
       Map.empty
@@ -486,10 +551,16 @@ trait SimpleBlog extends ZTBlog:
       revisionBinder.fold(List.empty[ZTEndpointBinding]): rb =>
         entriesResolved.toList
           .flatMap( er => er.entryInfo.updateHistory.toList.map( ur => (er.entryInfo.permalinkPathSiteRooted, ur ) ) )
-          .collect { case ( ppsr, UpdateRecord(_, _, Some( revisionSpec ) ) ) => rb.revisionEndpointBinding(revisionSpec,ppsr,"text/html", immutable.Set.empty) }
-    (basicBindings ++ pastRevisionBindings) :+ mainRssBinding
+          .collect { case ( ppsr, UpdateRecord(_, _, Some( revisionSpec ), _ ) ) => rb.revisionEndpointBinding(revisionSpec,ppsr,"text/html", immutable.Set.empty) }
 
-    val stage0 = ZTEndpointBinding.Source.Trivial( (basicBindings ++ pastRevisionBindings) :+ mainRssBinding )
+    val sproutRssBindings =
+      entriesResolved.toList
+        .filter( _.entryInfo.sprout )
+        .map: sprout =>
+          val info = sprout.entryInfo
+          ZTEndpointBinding.publicReadOnlyRss( info.sproutFeedSiteRooted, site, zio.ZIO.attempt( makeSproutFeed(this)(sprout).bytes ), identifiers(sprout).map( _ + "-sprout-rss" ) )
+
+    val stage0 = ZTEndpointBinding.Source.Trivial( (basicBindings ++ pastRevisionBindings) ++ sproutRssBindings :+ mainRssBinding )
 
     val diffPrerequesites : Option[Tuple2[RevisionBinder.RevisionPathFinder,DiffBinder]] =
       for
@@ -505,10 +576,10 @@ trait SimpleBlog extends ZTBlog:
             entriesResolved.toList.flatMap: entry =>
               val noncurrent =
                 nonCurrentUpdateRecordToOwnLatestMinorRevisionSpec(entry.entryInfo.updateHistory).toList
-                  .collect { case Tuple2( UpdateRecord(_, _, Some(srs)), lmrs ) => ( entry.entryInfo.permalinkPathSiteRooted, srs, Some(lmrs) ) }
+                  .collect { case Tuple2( UpdateRecord(_, _, Some(srs), _), lmrs ) => ( entry.entryInfo.permalinkPathSiteRooted, srs, Some(lmrs) ) }
               val current = entry.entryInfo.updateHistory.headOption.flatMap( _.supercededRevisionSpec ).map( srs => (entry.entryInfo.permalinkPathSiteRooted, srs, None) )
               noncurrent ++ current
-          val sourceBindingBySiteRootedPath : Rooted => ZTEndpointBinding = rooted => stage0.bindingBySiteRootedPath(rooted) 
+          val sourceBindingBySiteRootedPath : Rooted => ZTEndpointBinding = rooted => stage0.bindingBySiteRootedPath(rooted)
           val diffBindings =
             diffTuples.map: tup =>
               val ( origSiteRootedPath, before, after ) = tup
@@ -516,5 +587,5 @@ trait SimpleBlog extends ZTBlog:
           stage0.endpointBindings ++ diffBindings    
         case None =>
           stage0.endpointBindings
-          
+
     withDiffs

@@ -16,8 +16,8 @@ import Attribute.Key
 import sttp.tapir.EndpointIO.annotations.description
 
 object UpdateRecord:
-  def apply( timestamp : String, description : Option[String], supercededVersionSpec : Option[String], tz : ZoneId = ZoneId.systemDefault() ) : UpdateRecord =
-    apply( parseTimestamp(timestamp, tz).get, description, supercededVersionSpec )
+  def apply( timestamp : String, description : Option[String], supercededVersionSpec : Option[String], revisionAuthors : Option[Seq[String]] = None ) : UpdateRecord =
+    apply( parseTimestamp(timestamp).get, description, supercededVersionSpec, revisionAuthors )
 
   case class ForDisplay(
     timestamp : Instant,
@@ -26,13 +26,14 @@ object UpdateRecord:
     supercededRevisionSpec : Option[String],
     finalMinorRevisionRelative : Option[Rel],
     supercededRevisionRelative : Option[Rel],
-    diffRelative : Option[Rel]
+    diffRelative : Option[Rel],
+    revisionAuthors : Option[Seq[String]]
   )
 
   given ordering : Ordering[UpdateRecord] =
-    Ordering.by( (ur : UpdateRecord) => (ur.timestamp,ur.description,ur.supercededRevisionSpec) ).reverse
+    Ordering.by( (ur : UpdateRecord) => (ur.timestamp,ur.description,ur.supercededRevisionSpec, ur.revisionAuthors.map(_.mkString)) ).reverse
 
-case class UpdateRecord( timestamp : Instant, description : Option[String], supercededRevisionSpec : Option[String] )
+case class UpdateRecord( timestamp : Instant, description : Option[String], supercededRevisionSpec : Option[String], revisionAuthors : Option[Seq[String]] )
 
 private val LINESEP = scala.util.Properties.lineSeparator
 

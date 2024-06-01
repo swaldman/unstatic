@@ -77,6 +77,7 @@ object Attribute:
   enum Key[T]( converter : Key.Converter[T], variations : List[String] ) extends Key.Abstract[T](converter, variations):
     case `Title`              extends Key[String]                           (Key.Converter.SimpleString,                       Nil)
     case `Author`             extends Key[List[String]]                     (Key.Converter.StringList,    "Authors"         :: Nil)
+    case `InitialAuthor`      extends Key[List[String]]                     (Key.Converter.StringList,    "InitialAuthors"  :: Nil)
     case `Tag`                extends Key[List[String]]                     (Key.Converter.StringList,    "Tags"            :: Nil)
     case `PubDate`            extends Key[Instant]                          (Key.Converter.Timestamp,     "PublicationDate" :: Nil)
     case `Content-Type`       extends Key[String]                           (Key.Converter.SimpleString,  "ContentType"     :: Nil)
