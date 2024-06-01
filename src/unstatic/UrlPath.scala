@@ -10,13 +10,16 @@ object UrlPath:
     def apply( url : URL    ) : Abs = Abs(URL(url,"/"), Rooted.parse(url.getPath) )
   final case class Abs private[UrlPath] ( server : URL, path : Rooted ) extends UrlPath:
     def serverRoot : Abs = this.copy(path = Rooted.root)
+    def resolve(relpath: String) : Abs = this.copy( path = path.resolve(relpath) )
     def resolve(relpath: UrlPath.Rel): Abs = this.copy( path = path.resolve(relpath) )
+    def resolveSibling(relpath: String): Abs = this.copy( path = path.resolveSibling(relpath) )
     def resolveSibling(relpath: UrlPath.Rel): Abs = this.copy( path = path.resolveSibling(relpath) )
     def relativize( other : Abs ) : Rel =
       if (this.server == other.server) then
         path.relativize(other.path)
       else
         throw new CannotRelativize(s"'${this}' and '${other}' do not share the same server.")
+    def relativizeSibling( other : Abs ) : UrlPath.Rel = this.parent.relativize(other)
     def embedRoot(rooted : UrlPath.Rooted): Abs = resolve(rooted.unroot)
     def parentOption : Option[Abs] = path.parentOption.map(p => this.copy(path=p))
     def parent : Abs = parentOption.getOrElse {
@@ -26,6 +29,7 @@ object UrlPath:
     def isLeaf = !isDir
     def asDir : Abs = if path.isDir then this else this.copy( path = path.asDir )
     def asLeaf : Abs = if path.isDir then this.copy( path = path.asLeaf ) else this
+    def withPath( newPath : Rooted ) : Abs = this.copy( path = newPath )
     override def toString() : String = server.toString() + path.toString().substring(1)
 
   trait PathPart[T <: PathPart[T]] extends UrlPath:
