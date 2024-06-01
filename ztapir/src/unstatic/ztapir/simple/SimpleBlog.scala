@@ -9,6 +9,8 @@ import unstatic.UrlPath.*
 import unstatic.ztapir.*
 import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 
+import com.mchange.conveniences.boolean.*
+
 object SimpleBlog:
   object Htmlifier:
     val identity : Htmlifier = (s : String, opts : Options) => s
@@ -49,7 +51,7 @@ object SimpleBlog:
       extraChildrenRaw : List[scala.xml.Elem] = Nil
     ) : Element.Item =
       val entryInfo = resolved.entryInfo
-      val permalinkRelativeHtml = blog.renderSingleFragment(blog.SiteLocation(entryInfo.permalinkPathSiteRooted), resolved, blog.Entry.Presentation.Rss)
+      val permalinkRelativeHtml = blog.renderSingleFragment(blog.site.location(entryInfo.permalinkPathSiteRooted), resolved, blog.Entry.Presentation.Rss)
       val (absolutizedHtml, summary) = absolutizedHtmlSummary(blog)( permalinkRelativeHtml, entryInfo.absPermalink )
       val (authorElement, mbCreatorElement) = authorElementMbCreatorElement( entryInfo.authors )
       val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
@@ -147,7 +149,7 @@ object SimpleBlog:
           tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
         Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
 
-    def sproutSuffix( timestamp : Instant ) : String = ???
+    private val SproutSuffixFormatterBase = DateTimeFormatter.ofPattern("""-yyyy'-'MM'-'dd'-'HH'-'mm'-'ss""")
 
     def makeSproutFeed( blog : SimpleBlog )(
       sprout                   : blog.EntryResolved,
@@ -160,10 +162,40 @@ object SimpleBlog:
       extraRssChildren         : List[Element[?]]     = Nil,
       extraRssChildrenRaw      : List[scala.xml.Elem] = Nil
     ) : Element.Rss =
+      val suffixFormatter = SproutSuffixFormatterBase.withZone( blog.timeZone )
       // absolutizedHtmlSummary( permalinkRelativeHtml : String, absPermalink : Abs ) : (String, String)
+      val info = sprout.entryInfo
+      val updates = blog.updateRecordsForDisplayFromSiteRoot(info)
+      val guidBase =
+        info.absPermalink.path.elements.lastOption match
+          case None => info.absPermalink.resolve("sprout").toString()
+          case Some(fn) =>
+            val lastDot = fn.lastIndexOf('.')
+            val modfn = if lastDot >= 0 then fn.substring(0, lastDot) else fn
+            info.absPermalink.resolveSibling( modfn + "_sprout" ).toString
+
+      def descElement(urfd : UpdateRecord.ForDisplay) = Element.Description( urfd.description.getOrElse(s"New major update, ${blog.dateTimeFormatter.format(urfd.timestamp)}") )
+      val (revisions, base) = ( updates.init, updates.last ) // would splitAt be more efficient?
       val baseItem =
-        ???
-      val updates = blog.updateRecordsForDisplayFromSiteRoot(sprout.entryInfo)
+        val baseUnfinished = revisions.isEmpty
+        val titleTag = baseUnfinished.tf("Working Draft")("Seed")
+        val linkElement = Element.Link(base.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
+        val (authorElement, mbCreatorElement) = authorElementMbCreatorElement( info.authors )
+        val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( info.pubDate ) )
+        val baseBase =
+          Element.Item(
+            title = info.mbTitle.map( title => Element.Title( s"[${titleTag}] ${title}" ) ),
+            link = Some(linkElement),
+            description = Some(descElement(base)),
+            author = Some(authorElement),
+            categories = Nil,
+            comments = None,
+            enclosure = None,
+            guid = Some(guidElement),
+            pubDate = Some(Element.PubDate(info.pubDate.atZone(blog.timeZone))),
+            source = None
+          )
+        mbCreatorElement.fold( baseBase )( creator => baseBase.withExtra( creator ) )  
       ???
 
   end Rss
