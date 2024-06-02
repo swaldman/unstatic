@@ -8,9 +8,10 @@ import unstatic.{Site, *}
 import unstatic.UrlPath.*
 import unstatic.ztapir.*
 import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
+import com.mchange.mailutil.{Smtp,SmtpAddressParseFailed}
 
 import com.mchange.conveniences.boolean.*
-import unstatic.ztapir.simple.SimpleBlog.Rss.makeSproutFeed
+import zio.prelude.classic
 
 object SimpleBlog:
   object Htmlifier:
@@ -25,25 +26,25 @@ object SimpleBlog:
       val lastSpace = tmp.lastIndexOf(' ')
       (if lastSpace >= 0 then tmp.substring(0, lastSpace) else tmp) + "..."
 
+    // if you need boilerplate before the substance of your entries, wrap it in something with the 'rss-description-exclude' class
+    // so that it's removed prior to generating the RSS subscription
     private def absolutizedHtmlSummary(blog : SimpleBlog)( permalinkRelativeHtml : String, absPermalink : Abs ) : (String, String) =
       val jsoupDoc = org.jsoup.Jsoup.parseBodyFragment(permalinkRelativeHtml, absPermalink.parent.toString)
+      jsoupDoc.select(".rss-description-exclude").remove()
       mutateResolveRelativeUrls(jsoupDoc)
       (jsoupDoc.body().html, rssSummaryAsDescription(jsoupDoc,blog.defaultSummaryAsDescriptionMaxLen))
 
-    private def authorElementMbCreatorElement( authorSeq : Seq[String] ) : (Element.Author, Option[Element.DublinCore.Creator]) =
-      val authorsString : Option[String] =
-        authorSeq.length match
-          case 0 => None
-          case 1 => Some( authorSeq.head )
-          case 2 => Some( authorSeq.head + " and " + authorSeq.last )
-          case n =>
-            val anded = authorSeq.init :+ s"and ${authorSeq.last}"
-            Some( anded.mkString(", ") )
-      val nospamAuthorElem =
-        Element.Author( authorsString.fold("nospam@dev.null")(as => s"nospam@dev.null (${as})") )
-      val mbDcCreatorElem =
-        authorsString.map( as => Element.DublinCore.Creator( as ) )
-      ( nospamAuthorElem, mbDcCreatorElem )  
+    private def mbAuthorElementCreatorElements( authorSeq : Seq[String] ) : (Option[Element.Author], Option[Seq[Element.DublinCore.Creator]]) =
+      def onlyCreators : (Option[Element.Author], Option[Seq[Element.DublinCore.Creator]]) = ( None, Some( authorSeq.map( a => Element.DublinCore.Creator( a.trim ) ) ) )
+      authorSeq.size match
+        case 0 => (None, None)
+        case 1 =>
+          try
+            val smtpAddress = Smtp.Address.parseSingle( authorSeq.head )
+            (Some(Element.Author( smtpAddress.rendered )), None)
+          catch
+            case sapf : SmtpAddressParseFailed => onlyCreators
+        case _ => onlyCreators
 
     def rssItem( blog : SimpleBlog )(
       resolved : blog.EntryResolved,
@@ -54,17 +55,38 @@ object SimpleBlog:
       val entryInfo = resolved.entryInfo
       val permalinkRelativeHtml = blog.renderSingleFragment(blog.site.location(entryInfo.permalinkPathSiteRooted), resolved, blog.Entry.Presentation.Rss)
       val (absolutizedHtml, summary) = absolutizedHtmlSummary(blog)( permalinkRelativeHtml, entryInfo.absPermalink )
-      val (authorElement, mbCreatorElement) = authorElementMbCreatorElement( entryInfo.authors )
+      val (mbAuthorElement, mbCreatorElements) = mbAuthorElementCreatorElements( entryInfo.authors )
       val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
       val linkElement = Element.Link(entryInfo.absPermalink.toString)
       val guidElement = Element.Guid(isPermalink = true, entryInfo.absPermalink.toString)
+
+      val updateHistory = entryInfo.updateHistory
+      val mbUpdateHistoryElement =
+        updateHistory.nonEmpty.toOption.map: _ =>
+          val (updateElements, mbInitialElement) =
+            val urfds = blog.updateRecordsForDisplayFromSiteRoot(entryInfo)
+            val (updates, initial) = (urfds.init,urfds.tail)
+            val ues = updates.map: urfd =>
+              val ts = Element.Iffy.Timestamp(urfd.timestamp)
+              val mbDesc = urfd.description.map(d=>Element.Atom.Summary(d))
+              val mbRev = urfd.supercededRevisionRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Revision(abs.toString) )
+              val mbDiff = urfd.diffRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Diff( abs.toString ) )
+              val creators = urfd.revisionAuthors.fold(Seq.empty)( _.map(author => Element.DublinCore.Creator(author) ) )
+              Element.Iffy.Update(ts,mbDesc,mbRev,mbDiff,creators)
+            val mbInitial =
+              val mbCreators = entryInfo.mbInitialAuthors.fold(None)( authors => Some(authors.map(author => Element.DublinCore.Creator(author))) )
+              mbCreators.map( creators => Element.Iffy.Initial(creators) )
+            (ues,mbInitial)
+          Element.Iffy.UpdateHistory( updateElements, mbInitialElement )
+
+      // println( s"mbUpdateHistoryElement: ${mbUpdateHistoryElement}" )
 
       val standardItem =
         Element.Item(
           title = mbTitleElement,
           link = Some(linkElement),
           description = Some(Element.Description(summary)),
-          author = Some(authorElement),
+          author = mbAuthorElement,
           categories = Nil,
           comments = None,
           enclosure = None,
@@ -73,10 +95,11 @@ object SimpleBlog:
           source = None
         )
       val baseItem =
-        val withCreator = mbCreatorElement.fold( standardItem )(dcce => standardItem.withExtra( dcce ))
+        val withCreator = mbCreatorElements.fold( standardItem )(dcces => standardItem.withExtras( dcces ))
         val withUpdated = entryInfo.updateHistory.headOption.fold( withCreator )( ur => withCreator.withExtra( Element.Atom.Updated( ur.timestamp ) ) )
         val withFullContent = if fullContent then withUpdated.withExtra(Element.Content.Encoded(absolutizedHtml)) else withUpdated
-        withFullContent
+        val withUpdateHistory = mbUpdateHistoryElement.fold(withFullContent)( uhe => withFullContent.withExtra(uhe) )
+        withUpdateHistory
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
     def defaultChannelSpecNow( blog : SimpleBlog ) : Element.Channel.Spec =
@@ -167,62 +190,65 @@ object SimpleBlog:
       val guidBase = info.sproutBaseAbs.toString
 
       def descElementContentEncodedElement(urfd : UpdateRecord.ForDisplay) =
-        val descHeadline = s"""[Update — ${blog.dateTimeFormatter.format(urfd.timestamp)}] ${urfd.description.getOrElse(s"New major update.")}"""
+        val descUpdate = s"""Update — ${blog.dateTimeFormatter.format(urfd.timestamp)}"""
+        val desc =  s"""${urfd.description.getOrElse(s"New major update.")}"""
         def liElem( link : Abs, text : String ) = s"""<li><a href="${link}">${text}</a></li>"""
         val contentHtml =
-          s"""|<p>${descHeadline}</p>
+          s"""|<p><b>${descUpdate}</b></p>
+              |
+              |<p>${desc}</p>
               |
               |<ul>
               |${urfd.finalMinorRevisionRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold("")(abs => liElem(abs, "This revision"))}
               |${urfd.diffRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold("")(abs => liElem(abs, "Diff from prior revision"))}
               |<li><a href="${info.absPermalink}">Current revision</a> <em>(may be newer than the revision announced here!)</em></li>
               |</ul>""".stripMargin
-        ( Element.Description( descHeadline ), Element.Content.Encoded(contentHtml) )
-      def _authorElementMbCreatorElement( urfd : UpdateRecord.ForDisplay ) : (Element.Author, Option[Element.DublinCore.Creator]) =
-        authorElementMbCreatorElement( urfd.revisionAuthors.getOrElse(info.authors) )
+        ( Element.Description( descUpdate + LINESEP + LINESEP + desc ), Element.Content.Encoded(contentHtml) )
 
       val (revisions, base) = ( updates.init, updates.last ) // would splitAt be more efficient?
       val baseItem =
         val baseUnfinished = revisions.isEmpty
-        val titleTag = baseUnfinished.tf("Working Draft")("Seed")
+        val titleTag = baseUnfinished.tf("Latest Update")("Seed")
         val linkElement = Element.Link(base.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
         val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( info.pubDate ) )
         val (de, cee) = descElementContentEncodedElement(base)
-        val (authorElement, mbCreatorElement) = _authorElementMbCreatorElement( base )
+        val (mbAuthorElement, mbCreatorElements) = mbAuthorElementCreatorElements( base.revisionAuthors.getOrElse(info.authors) )
         val baseBase =
           Element.Item(
             title = info.mbTitle.map( title => Element.Title( s"[${titleTag}] ${title}" ) ),
             link = Some(linkElement),
             description = Some(de),
-            author = Some(authorElement),
+            author = mbAuthorElement,
             categories = Nil,
             comments = None,
             enclosure = None,
             guid = Some(guidElement),
             pubDate = Some(Element.PubDate(info.pubDate.atZone(blog.timeZone))),
             source = None
-          ).withExtra(cee)
-        mbCreatorElement.fold( baseBase )( creator => baseBase.withExtra( creator ) )
+          )
+        val withCreators = mbCreatorElements.fold( baseBase )( creators => baseBase.withExtras( creators ) )
+        withCreators.withExtra(cee)
       def updateItem(urfd : UpdateRecord.ForDisplay, unfinished : Boolean ) =
-        val titleTag = unfinished.tf("Working Draft")("Update")
+        val titleTag = unfinished.tf("Latest Update")("Update")
         val linkElement = Element.Link(urfd.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
         val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( urfd.timestamp ) )
         val (de, cee) = descElementContentEncodedElement(urfd)
-        val (authorElement, mbCreatorElement) = _authorElementMbCreatorElement( urfd )
+        val (mbAuthorElement, mbCreatorElements) = mbAuthorElementCreatorElements( base.revisionAuthors.getOrElse(info.authors) )
         val updateBase = 
           Element.Item(
             title = info.mbTitle.map( title => Element.Title( s"[${titleTag}] ${title}" ) ),
             link = Some(linkElement),
             description = Some(de),
-            author = Some(authorElement),
+            author = mbAuthorElement,
             categories = Nil,
             comments = None,
             enclosure = None,
             guid = Some(guidElement),
             pubDate = Some(Element.PubDate(urfd.timestamp.atZone(blog.timeZone))),
             source = None
-          ).withExtra( cee )
-        mbCreatorElement.fold( updateBase )( creator => updateBase.withExtra( creator ) )
+          )
+        val withCreators = mbCreatorElements.fold( updateBase )( creators => updateBase.withExtras( creators ) )
+        withCreators.withExtra( cee )
       val items =
         val revItems = if revisions.nonEmpty then updateItem( revisions.head, true ) +: revisions.tail.map( urfd => updateItem(urfd, false) ) else Nil
         revItems :+ baseItem
@@ -558,7 +584,12 @@ trait SimpleBlog extends ZTBlog:
         .filter( _.entryInfo.sprout )
         .map: sprout =>
           val info = sprout.entryInfo
-          ZTEndpointBinding.publicReadOnlyRss( info.sproutFeedSiteRooted, site, zio.ZIO.attempt( makeSproutFeed(this)(sprout).bytes ), identifiers(sprout).map( _ + "-sprout-rss" ) )
+          ZTEndpointBinding.publicReadOnlyRss(
+            info.sproutFeedSiteRooted,
+            site,
+            zio.ZIO.attempt( SimpleBlog.Rss.makeSproutFeed(this)(sprout).bytes ),
+            identifiers(sprout).map( _ + "-sprout-rss" )
+          )
 
     val stage0 = ZTEndpointBinding.Source.Trivial( (basicBindings ++ pastRevisionBindings) ++ sproutRssBindings :+ mainRssBinding )
 

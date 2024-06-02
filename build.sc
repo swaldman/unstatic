@@ -18,11 +18,12 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
 
     // it'd save some repetition if these could be Products. maybe a fun macro project?
     object ZTapir {
+      val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.0.9-SNAPSHOT"
       val Conveniences       = ivy"com.mchange::conveniences:0.0.4-SNAPSHOT"
+      val Mailutil           = ivy"com.mchange::mailutil:0.0.4-SNAPSHOT"
       val TapirFiles         = ivy"com.softwaremill.sttp.tapir::tapir-files:${TapirVersion}"
       val TapirZio           = ivy"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = ivy"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
-      val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.0.9-SNAPSHOT"
       val JGit               = ivy"org.eclipse.jgit:org.eclipse.jgit:6.9.0.202403050737-r"
       val Jsoup              = ivy"org.jsoup:jsoup:1.17.2"
       val JavaDiffUtils      = ivy"io.github.java-diff-utils:java-diff-utils:4.12"
@@ -75,6 +76,7 @@ object unstatic extends RootModule with UnstaticBuildModule {
       super.ivyDeps() ++
         Agg(
           Dependency.ZTapir.Conveniences,
+          Dependency.ZTapir.Mailutil,
           Dependency.ZTapir.TapirFiles,
           Dependency.ZTapir.TapirZio,
           Dependency.ZTapir.TapirZioHttpServer,
