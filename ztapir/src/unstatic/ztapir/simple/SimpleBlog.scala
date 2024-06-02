@@ -67,12 +67,12 @@ object SimpleBlog:
             val urfds = blog.updateRecordsForDisplayFromSiteRoot(entryInfo)
             val (updates, initial) = (urfds.init,urfds.tail)
             val ues = updates.map: urfd =>
-              val ts = Element.Iffy.Timestamp(urfd.timestamp)
+              val updated = Element.Atom.Updated(urfd.timestamp)
               val mbDesc = urfd.description.map(d=>Element.Atom.Summary(d))
               val mbRev = urfd.supercededRevisionRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Revision(abs.toString) )
               val mbDiff = urfd.diffRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Diff( abs.toString ) )
               val creators = urfd.revisionAuthors.fold(Seq.empty)( _.map(author => Element.DublinCore.Creator(author) ) )
-              Element.Iffy.Update(ts,mbDesc,mbRev,mbDiff,creators)
+              Element.Iffy.Update(updated,mbDesc,mbRev,mbDiff,creators)
             val mbInitial =
               val mbCreators = entryInfo.mbInitialAuthors.fold(None)( authors => Some(authors.map(author => Element.DublinCore.Creator(author))) )
               mbCreators.map( creators => Element.Iffy.Initial(creators) )
@@ -189,20 +189,31 @@ object SimpleBlog:
       val updates = blog.updateRecordsForDisplayFromSiteRoot(info)
       val guidBase = info.sproutBaseAbs.toString
 
-      def descElementContentEncodedElement(urfd : UpdateRecord.ForDisplay) =
+      def descElementContentEncodedElement(urfd : UpdateRecord.ForDisplay, unfinished : Boolean) =
         val descUpdate = s"""Update — ${blog.dateTimeFormatter.format(urfd.timestamp)}"""
         val desc =  s"""${urfd.description.getOrElse(s"New major update.")}"""
-        def liElem( link : Abs, text : String ) = s"""<li><a href="${link}">${text}</a></li>"""
+        def liAElem( link : Abs, text : String ) = s"""<li><a href="${link}">${text}</a></li>"""
+        def liEmElem( text : String ) = s"""<li><em>${text}</em></li>"""
         val contentHtml =
-          s"""|<p><b>${descUpdate}</b></p>
-              |
-              |<p>${desc}</p>
-              |
-              |<ul>
-              |${urfd.finalMinorRevisionRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold("")(abs => liElem(abs, "This revision"))}
-              |${urfd.diffRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold("")(abs => liElem(abs, "Diff from prior revision"))}
-              |<li><a href="${info.absPermalink}">Current revision</a> <em>(may be newer than the revision announced here!)</em></li>
-              |</ul>""".stripMargin
+          if unfinished then
+            s"""|<p><b>${descUpdate}</b></p>
+                |
+                |<p>${desc}</p>
+                |
+                |<ul>
+                |<li><a href="${info.absPermalink}">Current, latest revision</a> <em>(may be newer than the revision announced here!)</em></li>
+                |${urfd.diffRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold(liEmElem("No diff is available for this revision."))(abs => liAElem(abs, "Diff from prior revision"))}
+                |</ul>""".stripMargin
+          else  
+            s"""|<p><b>${descUpdate}</b></p>
+                |
+                |<p>${desc}</p>
+                |
+                |<ul>
+                |${urfd.finalMinorRevisionRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold(liEmElem("No link specifically to this revision is avaiable."))(abs => liAElem(abs, "This revision"))}
+                |${urfd.diffRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold(liEmElem("No diff is available for this revision."))(abs => liAElem(abs, "Diff from prior revision"))}
+                |<li><a href="${info.absPermalink}">Current, latest revision</a> <em>(may be newer than the revision announced here!)</em></li>
+                |</ul>""".stripMargin
         ( Element.Description( descUpdate + LINESEP + LINESEP + desc ), Element.Content.Encoded(contentHtml) )
 
       val (revisions, base) = ( updates.init, updates.last ) // would splitAt be more efficient?
@@ -211,7 +222,7 @@ object SimpleBlog:
         val titleTag = baseUnfinished.tf("Latest Update")("Seed")
         val linkElement = Element.Link(base.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
         val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( info.pubDate ) )
-        val (de, cee) = descElementContentEncodedElement(base)
+        val (de, cee) = descElementContentEncodedElement(base, baseUnfinished)
         val (mbAuthorElement, mbCreatorElements) = mbAuthorElementCreatorElements( base.revisionAuthors.getOrElse(info.authors) )
         val baseBase =
           Element.Item(
@@ -232,7 +243,7 @@ object SimpleBlog:
         val titleTag = unfinished.tf("Latest Update")("Update")
         val linkElement = Element.Link(urfd.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
         val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( urfd.timestamp ) )
-        val (de, cee) = descElementContentEncodedElement(urfd)
+        val (de, cee) = descElementContentEncodedElement(urfd, unfinished)
         val (mbAuthorElement, mbCreatorElements) = mbAuthorElementCreatorElements( base.revisionAuthors.getOrElse(info.authors) )
         val updateBase = 
           Element.Item(
