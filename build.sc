@@ -6,10 +6,10 @@ import mill.scalalib.publish._
 import mill.define.Target
 
 trait UnstaticBuildModule extends ScalaModule with PublishModule {
-  val UnstaticVersion   = "0.3.1-SNAPSHOT"
+  val UnstaticVersion   = "0.3.1"
 
   object Dependency {
-    val UntemplateVersion = "0.1.3-SNAPSHOT"
+    val UntemplateVersion = "0.1.3"
     val TapirVersion      = "1.10.7"
     val FlexmarkVersion   = "0.64.8"
 
@@ -18,9 +18,9 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
 
     // it'd save some repetition if these could be Products. maybe a fun macro project?
     object ZTapir {
-      val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.0.9-SNAPSHOT"
-      val Conveniences       = ivy"com.mchange::conveniences:0.0.4-SNAPSHOT"
-      val Mailutil           = ivy"com.mchange::mailutil:0.0.4-SNAPSHOT"
+      val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.0.9"
+      val Conveniences       = ivy"com.mchange::conveniences:0.0.4"
+      val Mailutil           = ivy"com.mchange::mailutil:0.0.4"
       val TapirFiles         = ivy"com.softwaremill.sttp.tapir::tapir-files:${TapirVersion}"
       val TapirZio           = ivy"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = ivy"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
