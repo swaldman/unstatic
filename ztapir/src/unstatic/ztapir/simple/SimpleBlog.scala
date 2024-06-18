@@ -95,7 +95,8 @@ object SimpleBlog:
           source = None
         )
       val baseItem =
-        val withCreator = mbCreatorElements.fold( standardItem )(dcces => standardItem.withExtras( dcces ))
+        val withSynthetic = if entryInfo.synthetic then standardItem.withExtra(Element.Iffy.Synthetic()) else standardItem
+        val withCreator = mbCreatorElements.fold( withSynthetic )(dcces => withSynthetic.withExtras( dcces ))
         val withUpdated = entryInfo.updateHistory.headOption.fold( withCreator )( ur => withCreator.withExtra( Element.Atom.Updated( ur.timestamp ) ) )
         val withFullContent = if fullContent then withUpdated.withExtra(Element.Content.Encoded(absolutizedHtml)) else withUpdated
         val withUpdateHistory = mbUpdateHistoryElement.fold(withFullContent)( uhe => withFullContent.withExtra(uhe) )
@@ -310,6 +311,7 @@ trait SimpleBlog extends ZTBlog:
         sprout : Boolean,
         mbAnchor : Option[String],
         mbLastModified : Option[Instant],
+        synthetic : Boolean,
         contentType : String,
         mediaPathSiteRooted : Rooted, // from Site root
         permalinkPathSiteRooted : Rooted // from Site root
@@ -335,6 +337,7 @@ trait SimpleBlog extends ZTBlog:
           mbSproutInfo,
           mbAnchor,
           mbLastModified,
+          synthetic,
           contentType,
           mediaPathSiteRooted,
           permalinkPathSiteRooted
@@ -349,6 +352,7 @@ trait SimpleBlog extends ZTBlog:
       mbSproutInfo : Option[Info.SproutInfo],
       mbAnchor : Option[String],
       mbLastModified : Option[Instant],
+      synthetic : Boolean,
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
@@ -473,11 +477,12 @@ trait SimpleBlog extends ZTBlog:
     val sprout                    = Key.`Sprout`.caseInsensitiveCheck(template).getOrElse( false )
     val mbAnchor                  = Key.`Anchor`.caseInsensitiveCheck(template)
     val mbLastModified            = template.UntemplateLastModified.map( Instant.ofEpochMilli )
+    val synthetic                 = template.UntemplateSynthetic
     val contentType               = normalizeContentType( findContentType( template ) )
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, mbLastModified, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, mbLastModified, synthetic, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant, mbInitialAuthors : Option[Seq[String]] ) : Seq[UpdateRecord.ForDisplay] =
