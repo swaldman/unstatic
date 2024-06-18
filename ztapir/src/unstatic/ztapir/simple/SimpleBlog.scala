@@ -20,6 +20,14 @@ object SimpleBlog:
     val defaultMarkdown : Htmlifier = (s : String, opts : Options) => Flexmark.defaultMarkdownToHtml(s, opts.generatorFullyQualifiedName )
     case class Options( generatorFullyQualifiedName : Option[String] )
   type Htmlifier = Function2[String,Htmlifier.Options,String]
+  object SproutInfo:
+    def apply( sproutBaseSiteRooted : Rooted, site : ZTSite ) : SproutInfo =
+      require( sproutBaseSiteRooted.elements.nonEmpty, "sproutBaseSiteRooted should never be merely root: " + sproutBaseSiteRooted )
+      val sproutBaseName = sproutBaseSiteRooted.elements.last
+      val sproutFeedSiteRooted = sproutBaseSiteRooted.resolveSibling( sproutBaseName + ".rss" )
+      val sproutBaseAbs = site.absFromSiteRooted( sproutBaseSiteRooted )
+      SproutInfo( sproutBaseSiteRooted, sproutFeedSiteRooted, sproutBaseAbs )
+  case class SproutInfo private ( sproutBaseSiteRooted : Rooted, sproutFeedSiteRooted : Rooted, sproutBaseAbs : Abs )
   object Rss:
     private def rssSummaryAsDescription(jsoupDocAbsolutized : org.jsoup.nodes.Document, maxLen : Int) : String =
       val tmp = jsoupDocAbsolutized.text().take(maxLen)
@@ -183,7 +191,7 @@ object SimpleBlog:
 
     def makeSproutFeed( blog : SimpleBlog )(
       sprout                   : blog.EntryResolved,
-      sproutInfo               : blog.Entry.Info.SproutInfo,
+      sproutInfo               : SproutInfo,
       rssNamespaces            : List[Namespace]      = DefaultRssNamespaces,
       extraChannelChildren     : List[Element[?]]     = Nil,
       extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
@@ -293,62 +301,11 @@ end SimpleBlog
 
 trait SimpleBlog extends ZTBlog:
 
-  import SimpleBlog.Htmlifier
+  import SimpleBlog.{Htmlifier,SproutInfo}
 
   object Entry:
     val Presentation  = Blog.EntryPresentation
     type Presentation = Blog.EntryPresentation
-    object Info:
-      case class SproutInfo( sproutBaseSiteRooted : Rooted ):
-        lazy val ( sproutFeedSiteRooted, sproutBaseAbs ) =
-          sproutBaseSiteRooted.elements.lastOption match
-            case None =>
-              throw new AssertionError( "sproutBaseSiteRooted should never be merely root: " + sproutBaseSiteRooted )
-            case Some( sproutBaseName ) =>
-              ( sproutBaseSiteRooted.resolveSibling( sproutBaseName + ".rss" ), site.absFromSiteRooted( sproutBaseSiteRooted ) )
-      def apply (
-        mbTitle : Option[String],
-        authors : Seq[String],
-        mbInitialAuthors : Option[Seq[String]],
-        tags : Seq[String],
-        pubDate : Instant,
-        updateHistory : immutable.SortedSet[UpdateRecord],
-        sprout : Boolean,
-        mbAnchor : Option[String],
-        mbLastModified : Option[Instant],
-        synthetic : Boolean,
-        hintAnnouncePolicy : Element.Iffy.HintAnnounce.Policy,
-        contentType : String,
-        mediaPathSiteRooted : Rooted, // from Site root
-        permalinkPathSiteRooted : Rooted // from Site root
-      ) : Info =
-        val mbSproutInfo =
-          if sprout then
-            permalinkPathSiteRooted.elements.lastOption match
-              case None =>
-                Some( SproutInfo( Rooted.root.resolve("sprout") ) ) // shouldn't happen, since our permalinks should never be directories or roots, but...
-              case Some(fn) =>
-                val lastDot = fn.lastIndexOf('.')
-                val modfn = if lastDot >= 0 then fn.substring(0, lastDot) else fn
-                Some( SproutInfo( permalinkPathSiteRooted.resolveSibling( modfn + "-sprout" ) ) )
-          else
-            None
-        Info(
-          mbTitle,
-          authors,
-          mbInitialAuthors,
-          tags,
-          pubDate,
-          updateHistory,
-          mbSproutInfo,
-          mbAnchor,
-          mbLastModified,
-          synthetic,
-          hintAnnouncePolicy,
-          contentType,
-          mediaPathSiteRooted,
-          permalinkPathSiteRooted
-        )
     final case class Info (
       mbTitle : Option[String],
       authors : Seq[String],
@@ -356,7 +313,7 @@ trait SimpleBlog extends ZTBlog:
       tags : Seq[String],
       pubDate : Instant,
       updateHistory : immutable.SortedSet[UpdateRecord],
-      mbSproutInfo : Option[Info.SproutInfo],
+      mbSproutInfo : Option[SproutInfo],
       mbAnchor : Option[String],
       mbLastModified : Option[Instant],
       synthetic : Boolean,
@@ -491,7 +448,19 @@ trait SimpleBlog extends ZTBlog:
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, mbLastModified, synthetic, hintAnnouncePolicy, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    val mbSproutInfo =
+      if sprout then
+        permalinkSiteRooted.elements.lastOption match
+          case None =>
+            Some( SproutInfo( Rooted.root.resolve("sprout"), this.site ) ) // shouldn't happen, since our permalinks should never be directories or roots, but...
+          case Some(fn) =>
+            val lastDot = fn.lastIndexOf('.')
+            val modfn = if lastDot >= 0 then fn.substring(0, lastDot) else fn
+            Some( SproutInfo( permalinkSiteRooted.resolveSibling( modfn + "-sprout" ), this.site ) )
+      else
+        None
+
+    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, mbSproutInfo, mbAnchor, mbLastModified, synthetic, hintAnnouncePolicy, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant, mbInitialAuthors : Option[Seq[String]] ) : Seq[UpdateRecord.ForDisplay] =
