@@ -289,7 +289,7 @@ object SimpleBlog:
           generator          = Some( "https://github.com/swaldman/unstatic" ),
         )
       val channel =
-        val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(sproutInfo.sproutFeedSiteRooted)) )
+        val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(sproutInfo.sproutFeedSiteRooted)) ).withExtra(Element.Iffy.Synthetic())
         val completenessValue = Element.Iffy.Completeness.Value.Metadata
         val completeness = Element.Iffy.Completeness( completenessValue )
         tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
