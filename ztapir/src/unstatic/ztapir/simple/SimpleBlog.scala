@@ -523,20 +523,6 @@ trait SimpleBlog extends ZTBlog:
     yield
       Rooted.root.resolve( relative )
 
-  /*
-  def priorRevisionSiteRooted( info : Entry.Info ) : Option[Rooted] = priorRevisionSiteRooted( info.updateHistory, info.permalinkPathSiteRooted )
-
-  def priorRevisionSiteRooted( updateHistory : immutable.SortedSet[UpdateRecord], permalinkPathSiteRooted : Rooted ) : Option[Rooted] =
-    updateHistory.headOption.flatMap( ur => priorRevisionSiteRooted( ur, permalinkPathSiteRooted ) )
-
-  def priorRevisionSiteRooted( updateRecord : UpdateRecord, permalinkPathSiteRooted : Rooted ) : Option[Rooted] =
-    for
-      rb <- this.revisionBinder
-      rs <- updateRecord.supercededRevisionSpec
-    yield
-      rb.revisionPathFinder( permalinkPathSiteRooted, rs )
-  */
-
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : EntryInput =
     Entry.Input( this, site, renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), resolved.entryInfo, presentation )
 
