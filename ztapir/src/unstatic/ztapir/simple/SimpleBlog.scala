@@ -309,6 +309,7 @@ trait SimpleBlog extends ZTBlog:
         updateHistory : immutable.SortedSet[UpdateRecord],
         sprout : Boolean,
         mbAnchor : Option[String],
+        mbLastModified : Option[Instant],
         contentType : String,
         mediaPathSiteRooted : Rooted, // from Site root
         permalinkPathSiteRooted : Rooted // from Site root
@@ -324,7 +325,7 @@ trait SimpleBlog extends ZTBlog:
                 Some( SproutInfo( permalinkPathSiteRooted.resolveSibling( modfn + "-sprout" ) ) )
           else
             None
-        Info(    
+        Info(
           mbTitle,
           authors,
           mbInitialAuthors,
@@ -333,6 +334,7 @@ trait SimpleBlog extends ZTBlog:
           updateHistory,
           mbSproutInfo,
           mbAnchor,
+          mbLastModified,
           contentType,
           mediaPathSiteRooted,
           permalinkPathSiteRooted
@@ -346,6 +348,7 @@ trait SimpleBlog extends ZTBlog:
       updateHistory : immutable.SortedSet[UpdateRecord],
       mbSproutInfo : Option[Info.SproutInfo],
       mbAnchor : Option[String],
+      mbLastModified : Option[Instant],
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
@@ -469,11 +472,12 @@ trait SimpleBlog extends ZTBlog:
     val updateHistory             = Key.`UpdateHistory`.caseInsensitiveCheck(template).getOrElse( immutable.SortedSet.empty[UpdateRecord] )
     val sprout                    = Key.`Sprout`.caseInsensitiveCheck(template).getOrElse( false )
     val mbAnchor                  = Key.`Anchor`.caseInsensitiveCheck(template)
+    val mbLastModified            = template.UntemplateLastModified.map( Instant.ofEpochMilli )
     val contentType               = normalizeContentType( findContentType( template ) )
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, mbLastModified, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant, mbInitialAuthors : Option[Seq[String]] ) : Seq[UpdateRecord.ForDisplay] =

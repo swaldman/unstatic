@@ -9,7 +9,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
   val UnstaticVersion   = "0.3.2-SNAPSHOT"
 
   object Dependency {
-    val UntemplateVersion = "0.1.3"
+    val UntemplateVersion = "0.1.4-SNAPSHOT"
     val TapirVersion      = "1.10.7"
     val FlexmarkVersion   = "0.64.8"
 
