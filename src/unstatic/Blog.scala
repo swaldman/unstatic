@@ -35,10 +35,20 @@ trait Blog:
 
   def entryUntemplates : immutable.Set[EntryUntemplate]
 
+  /**
+    * Override to augment basic entries with synthetic untemplates.
+    */
+  def syntheticEntryUntemplates( organicEntryUntemplates : immutable.Set[EntryUntemplate] ) : immutable.Set[EntryUntemplate] = immutable.Set.empty
+
+  def allEntryUntemplates : immutable.Set[EntryUntemplate] =
+    val organic = entryUntemplates
+    val synthetic = syntheticEntryUntemplates(organic)
+    organic ++ synthetic
+
   def entryInfo( template : EntryUntemplate ) : EntryInfo
 
   lazy val entriesResolved : immutable.SortedSet[EntryResolved] =
-    entryUntemplates.map(ut => EntryResolved(entryInfo(ut), ut)).to(immutable.SortedSet)
+    allEntryUntemplates.map(ut => EntryResolved(entryInfo(ut), ut)).to(immutable.SortedSet)
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : EntryPresentation ) : EntryInput
 
