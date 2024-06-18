@@ -98,7 +98,12 @@ object SimpleBlog:
         val withSynthetic = if entryInfo.synthetic then standardItem.withExtra(Element.Iffy.Synthetic()) else standardItem
         val withCreator = mbCreatorElements.fold( withSynthetic )(dcces => withSynthetic.withExtras( dcces ))
         val withUpdated = entryInfo.updateHistory.headOption.fold( withCreator )( ur => withCreator.withExtra( Element.Atom.Updated( ur.timestamp ) ) )
-        val withFullContent = if fullContent then withUpdated.withExtra(Element.Content.Encoded(absolutizedHtml)) else withUpdated
+        val withHintAnnouncePolicy =
+          if entryInfo.hintAnnouncePolicy != Element.Iffy.HintAnnounce.Policy.Always then
+            withUpdated.withExtra( Element.Iffy.HintAnnounce( entryInfo.hintAnnouncePolicy ) )
+          else
+            withUpdated
+        val withFullContent = if fullContent then withHintAnnouncePolicy.withExtra(Element.Content.Encoded(absolutizedHtml)) else withHintAnnouncePolicy
         val withUpdateHistory = mbUpdateHistoryElement.fold(withFullContent)( uhe => withFullContent.withExtra(uhe) )
         withUpdateHistory
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
@@ -312,6 +317,7 @@ trait SimpleBlog extends ZTBlog:
         mbAnchor : Option[String],
         mbLastModified : Option[Instant],
         synthetic : Boolean,
+        hintAnnouncePolicy : Element.Iffy.HintAnnounce.Policy,
         contentType : String,
         mediaPathSiteRooted : Rooted, // from Site root
         permalinkPathSiteRooted : Rooted // from Site root
@@ -338,6 +344,7 @@ trait SimpleBlog extends ZTBlog:
           mbAnchor,
           mbLastModified,
           synthetic,
+          hintAnnouncePolicy,
           contentType,
           mediaPathSiteRooted,
           permalinkPathSiteRooted
@@ -353,6 +360,7 @@ trait SimpleBlog extends ZTBlog:
       mbAnchor : Option[String],
       mbLastModified : Option[Instant],
       synthetic : Boolean,
+      hintAnnouncePolicy : Element.Iffy.HintAnnounce.Policy,
       contentType : String,
       mediaPathSiteRooted : Rooted, // from Site root
       permalinkPathSiteRooted : Rooted // from Site root
@@ -478,11 +486,12 @@ trait SimpleBlog extends ZTBlog:
     val mbAnchor                  = Key.`Anchor`.caseInsensitiveCheck(template)
     val mbLastModified            = template.UntemplateLastModified.map( Instant.ofEpochMilli )
     val synthetic                 = template.UntemplateSynthetic
+    val hintAnnouncePolicy        = Key.`HintAnnouncePolicy`.caseInsensitiveCheck(template).getOrElse( Element.Iffy.HintAnnounce.Policy.Always )
     val contentType               = normalizeContentType( findContentType( template ) )
 
     val MediaPathPermalink( mediaPathSiteRooted, permalinkSiteRooted ) = mediaPathPermalink( template )
 
-    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, mbLastModified, synthetic, contentType, mediaPathSiteRooted, permalinkSiteRooted)
+    Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, sprout, mbAnchor, mbLastModified, synthetic, hintAnnouncePolicy, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant, mbInitialAuthors : Option[Seq[String]] ) : Seq[UpdateRecord.ForDisplay] =

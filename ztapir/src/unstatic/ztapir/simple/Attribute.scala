@@ -7,6 +7,8 @@ import java.time.Instant
 import scala.util.Try
 import scala.collection.{immutable, IterableOnce}
 
+import audiofluidity.rss.Element
+
 // XXX: Here is some of where I'd like to warn,
 //      if things aren't found or aren't of
 //      expected type. For now we fail silently,
@@ -25,6 +27,12 @@ object Attribute:
     object Converter:
       private def unexpectedType(key : String, expected : String, found : Any) : Nothing =
         throw new BadAttributeException( s"${key}: Unexpected type. Expected ${expected}. Found: ${found}" )
+      val HintAnnouncePolicy : Converter[Element.Iffy.HintAnnounce.Policy] =
+        (key : String, a : Any) =>
+          a match
+            case policy : Element.Iffy.HintAnnounce.Policy => policy
+            case s : String => Element.Iffy.HintAnnounce.Policy.lenientParse(s).getOrElse( throw new BadAttributeException( s"'$s' is not a valid iffy:hint-announce policy." ) )
+            case other      => unexpectedType(key, "String or Element.Iffy.HintAnnounce.Policy", other)
       val SimpleString : Converter[String] =
         (key : String, a : Any) =>
           a match
@@ -87,4 +95,5 @@ object Attribute:
     case `Anchor`             extends Key[String]                           (Key.Converter.SimpleString,  "Uid"             :: Nil)
     case `UpdateHistory`      extends Key[immutable.SortedSet[UpdateRecord]](Key.Converter.UpdateRecords,                      Nil)
     case `Sprout`             extends Key[Boolean]                          (Key.Converter.SimpleBoolean,                      Nil) // see https://v5.chriskrycho.com/essays/feeds-are-not-fit-for-gardening/
+    case `HintAnnouncePolicy` extends Key[Element.Iffy.HintAnnounce.Policy] (Key.Converter.HintAnnouncePolicy,                 Nil)
 
