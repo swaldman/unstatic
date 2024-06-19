@@ -11,7 +11,6 @@ import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 import com.mchange.mailutil.{Smtp,SmtpAddressParseFailed}
 
 import com.mchange.conveniences.boolean.*
-import zio.prelude.classic
 
 object SimpleBlog:
   object Htmlifier:
@@ -20,6 +19,11 @@ object SimpleBlog:
     val defaultMarkdown : Htmlifier = (s : String, opts : Options) => Flexmark.defaultMarkdownToHtml(s, opts.generatorFullyQualifiedName )
     case class Options( generatorFullyQualifiedName : Option[String] )
   type Htmlifier = Function2[String,Htmlifier.Options,String]
+  case class SyntheticUpdateAnnouncementSpec (
+    updateAnnouncementAuthor : String,
+    beginning : Instant,
+    hintAnnouncePolicy : Element.Iffy.HintAnnounce.Policy = Element.Iffy.HintAnnounce.Policy.Piggyback
+  )
   object SproutInfo:
     def apply( sproutBaseSiteRooted : Rooted, site : ZTSite ) : SproutInfo =
       require( sproutBaseSiteRooted.elements.nonEmpty, "sproutBaseSiteRooted should never be merely root: " + sproutBaseSiteRooted )
@@ -28,6 +32,7 @@ object SimpleBlog:
       val sproutBaseAbs = site.absFromSiteRooted( sproutBaseSiteRooted )
       SproutInfo( sproutBaseSiteRooted, sproutFeedSiteRooted, sproutBaseAbs )
   case class SproutInfo private ( sproutBaseSiteRooted : Rooted, sproutFeedSiteRooted : Rooted, sproutBaseAbs : Abs )
+  val TimestampSuffixFormatterBase = DateTimeFormatter.ofPattern("""'-'yyyy'-'MM'-'dd'-'HH'-'mm'-'ss""")
   object Rss:
     private def rssSummaryAsDescription(jsoupDocAbsolutized : org.jsoup.nodes.Document, maxLen : Int) : String =
       val tmp = jsoupDocAbsolutized.text().take(maxLen)
@@ -187,8 +192,6 @@ object SimpleBlog:
           tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
         Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
 
-    private val SproutSuffixFormatterBase = DateTimeFormatter.ofPattern("""-yyyy'-'MM'-'dd'-'HH'-'mm'-'ss""")
-
     def makeSproutFeed( blog : SimpleBlog )(
       sprout                   : blog.EntryResolved,
       sproutInfo               : SproutInfo,
@@ -198,7 +201,7 @@ object SimpleBlog:
       extraRssChildren         : List[Element[?]]     = Nil,
       extraRssChildrenRaw      : List[scala.xml.Elem] = Nil
     ) : Element.Rss =
-      val suffixFormatter = SproutSuffixFormatterBase.withZone( blog.timeZone )
+      val suffixFormatter = TimestampSuffixFormatterBase.withZone( blog.timeZone )
       val info = sprout.entryInfo
       val updates = blog.updateRecordsForDisplayFromSiteRoot(info)
       val guidBase = sproutInfo.sproutBaseAbs.toString
@@ -218,7 +221,7 @@ object SimpleBlog:
                 |<li><a href="${info.absPermalink}">Current, latest revision</a> <em>(may be newer than the revision announced here!)</em></li>
                 |${urfd.diffRelative.map( rel => blog.site.absFromSiteRooted( Rooted.root.resolve(rel) ) ).fold(liEmElem("No diff is available for this revision."))(abs => liAElem(abs, "Diff from prior revision"))}
                 |</ul>""".stripMargin
-          else  
+          else
             s"""|<p><b>${descUpdate}</b></p>
                 |
                 |<p>${desc}</p>
@@ -301,7 +304,7 @@ end SimpleBlog
 
 trait SimpleBlog extends ZTBlog:
 
-  import SimpleBlog.{Htmlifier,SproutInfo}
+  import SimpleBlog.{Htmlifier,SproutInfo,SyntheticUpdateAnnouncementSpec,TimestampSuffixFormatterBase}
 
   object Entry:
     val Presentation  = Blog.EntryPresentation
@@ -353,13 +356,15 @@ trait SimpleBlog extends ZTBlog:
     end Input
   end Layout
 
-  // you can override this
-  val timeZone: ZoneId = ZoneId.systemDefault()
+  // you must override this
+  val timeZone: ZoneId
 
   // you can override these
   lazy val dayOnlyFormatter  = DateTimeFormatter.ofPattern("""yyyy'-'MM'-'dd""").withZone(timeZone)
   lazy val hourOnlyFormatter = DateTimeFormatter.ofPattern("""hh':'mm' 'a' 'zzz""").withZone(timeZone)
   lazy val dateTimeFormatter = DateTimeFormatter.ofPattern("""yyyy'-'MM'-'dd' @ 'hh':'mm' 'a' 'zzz""").withZone(timeZone)
+
+  private lazy val suffixFormatter = TimestampSuffixFormatterBase.withZone( timeZone )
 
   // you can override this
   val defaultSummaryAsDescriptionMaxLen = 500
@@ -522,6 +527,85 @@ trait SimpleBlog extends ZTBlog:
       relative <- previous.diffRelative
     yield
       Rooted.root.resolve( relative )
+
+  private def insertSuffixBeforeLeafExtension( rooted : Rooted, suffix : String ) : Rooted =
+    require( rooted.elements.nonEmpty, "Root is not a valid leaf path with extension: " + rooted )
+    val fn = rooted.elements.last
+    val lastDot = fn.lastIndexOf('.')
+    val base =
+      if lastDot >= 0 then
+        fn.substring(0, lastDot)
+      else
+        throw new IllegalArgumentException("Expected leaf path with extension, extension not found: " + rooted)
+    rooted.resolveSibling(base + suffix + fn.substring(lastDot))
+
+  // override this if you want to generate synthetic update announcement posts
+  def syntheticUpdateAnnouncementSpec : Option[SyntheticUpdateAnnouncementSpec] = None
+
+  def computeUpdateAnnouncePosts( organicEntries : immutable.Set[EntryUntemplate] ) : immutable.Set[EntryUntemplate] =
+    syntheticUpdateAnnouncementSpec match
+      case None => immutable.Set.empty
+      case Some( saus ) =>
+        def generatedEntries( ut : EntryUntemplate ) : immutable.Set[EntryUntemplate] =
+          import scala.math.Ordering.Implicits.infixOrderingOps
+          Attribute.Key.UpdateHistory.caseInsensitiveCheck(ut) match
+            case None => immutable.Set.empty
+            case Some( sset ) =>
+              val updatesToGenerate = sset.toSeq.filter( _.timestamp > saus.beginning )
+              if updatesToGenerate.isEmpty then
+                immutable.Set.empty
+              else
+                val mbTitle = Attribute.Key.Title.caseInsensitiveCheck(ut)
+                val mbPubDate = Attribute.Key.PubDate.caseInsensitiveCheck(ut)
+                val updateTitle =
+                  mbTitle match
+                    case Some( title ) => "Updated: " + title
+                    case None =>
+                      mbPubDate match
+                        case Some( instant ) => "An untitled post, first published " + dateTimeFormatter.format(instant) + ", was updated."
+                        case None => "An untitled post was signifucantly updated"
+                val synthTemplateSeq = updatesToGenerate.map: ur =>
+                  val info = entryInfo(ut)
+                  val attributes = immutable.Map[String,Any](
+                    Attribute.Key.Title.toString              -> updateTitle,
+                    Attribute.Key.Author.toString             -> saus.updateAnnouncementAuthor,
+                    Attribute.Key.PubDate.toString            -> ur.timestamp,
+                    Attribute.Key.HintAnnouncePolicy.toString -> saus.hintAnnouncePolicy,
+                    Attribute.Key.Permalink.toString          -> insertSuffixBeforeLeafExtension( info.permalinkPathSiteRooted, "-updated" + suffixFormatter.format(ur.timestamp) ).toString
+                  )
+                  def run( input : Entry.Input ) : untemplate.Result[Nothing] =
+                    given PageBase = PageBase.fromPage(input.renderLocation)
+                    val postLoc = site.location(info.permalinkPathSiteRooted)
+                    def firstBit( title : String ) = s"""A significant update of <a href="${postLoc.relative}"><i>${title}</i></a> was made on ${dateTimeFormatter.format(ur.timestamp)}."""
+                    def firstBitNoTitle = s"""A significant update of <a href="${postLoc.relative}">an untitled post</a> was made on ${dateTimeFormatter.format(ur.timestamp)}."""
+                    def secondBit( pubDate : Instant ) = s"""The post was originally published ${dateTimeFormatter.format(pubDate)}."""
+                    val text =
+                      (mbTitle, mbPubDate) match
+                        case ( Some(title), Some(pubDate) ) => "<p>" + firstBit(title) + " " + secondBit(pubDate) + "</p>"
+                        case ( None,        Some(pubDate) ) => "<p>" + firstBitNoTitle + " " + secondBit(pubDate) + "</p>"
+                        case ( Some(title), None          ) => "<p>" + firstBit(title) + "</p>"
+                        case ( None,        None          ) => "<p>" + firstBitNoTitle + "</p>"
+                    untemplate.Result(None, text)
+                  untemplate.Untemplate.Synthetic(
+                    core = run,
+                    UntemplateName = ut.UntemplateName + "_update_announcement_" + ur.timestamp.toEpochMilli + "_html",
+                    UntemplateInputName = "input",
+                    UntemplateInputTypeDeclared = "unstatic.ztapir.simple.SimpleBlog.Entry.Input",
+                    UntemplateInputTypeCanonical = Some( "unstatic.ztapir.simple.SimpleBlog.Entry.Input" ),
+                    UntemplateInputDefaultArgument = (None : Option[Any]),
+                    UntemplateOutputMetadataTypeDeclared = "Nothing",
+                    UntemplateOutputMetadataTypeCanonical = Some("Nothing"),
+                    UntemplateHeaderNote = "",
+                    UntemplateAttributes = attributes,
+                    UntemplateLastModified = Some( ur.timestamp.toEpochMilli )
+                  )
+                synthTemplateSeq.toSet
+        end generatedEntries
+        organicEntries.flatMap( generatedEntries )
+  end computeUpdateAnnouncePosts
+
+  override def syntheticEntryUntemplates( organicEntryUntemplates : immutable.Set[EntryUntemplate] ) : immutable.Set[EntryUntemplate] =
+    computeUpdateAnnouncePosts( organicEntryUntemplates )
 
   def entryInput( renderLocation : SiteLocation, resolved : EntryResolved, presentation : Entry.Presentation ) : EntryInput =
     Entry.Input( this, site, renderLocation, SiteLocation(resolved.entryInfo.mediaPathSiteRooted, site), resolved.entryInfo, presentation )
