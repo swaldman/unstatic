@@ -96,4 +96,5 @@ object Attribute:
     case `UpdateHistory`      extends Key[immutable.SortedSet[UpdateRecord]](Key.Converter.UpdateRecords,                      Nil)
     case `Sprout`             extends Key[Boolean]                          (Key.Converter.SimpleBoolean,                      Nil) // see https://v5.chriskrycho.com/essays/feeds-are-not-fit-for-gardening/
     case `HintAnnouncePolicy` extends Key[Element.Iffy.HintAnnounce.Policy] (Key.Converter.HintAnnouncePolicy,                 Nil)
+    case `SyntheticType`      extends Key[String]                           (Key.Converter.SimpleString,                       Nil) // intended only for synthetic untemplates!
 

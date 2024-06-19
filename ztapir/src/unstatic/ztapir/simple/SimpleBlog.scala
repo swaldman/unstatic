@@ -13,6 +13,10 @@ import com.mchange.mailutil.{Smtp,SmtpAddressParseFailed}
 import com.mchange.conveniences.boolean.*
 
 object SimpleBlog:
+  object SyntheticType:
+    def lenientParse( string : String ) : Option[SyntheticType] = SyntheticType.values.find( _.toString.equalsIgnoreCase( string ) )
+  enum SyntheticType:
+    case ItemUpdateFeed, UpdateAnnouncement
   object Htmlifier:
     val identity : Htmlifier = (s : String, opts : Options) => s
     val preText : Htmlifier = (s : String, opts : Options) => s"<pre>${s}</pre>"
@@ -108,7 +112,12 @@ object SimpleBlog:
           source = None
         )
       val baseItem =
-        val withSynthetic = if entryInfo.synthetic then standardItem.withExtra(Element.Iffy.Synthetic()) else standardItem
+        val withSynthetic =
+          if entryInfo.synthetic then
+            val `type` = Attribute.Key.SyntheticType.caseSensitiveCheck(resolved.entryUntemplate).map( t => Element.Iffy.Type(t) )
+            standardItem.withExtra(Element.Iffy.Synthetic(`type`))
+          else
+            standardItem
         val withCreator = mbCreatorElements.fold( withSynthetic )(dcces => withSynthetic.withExtras( dcces ))
         val withUpdated = entryInfo.updateHistory.headOption.fold( withCreator )( ur => withCreator.withExtra( Element.Atom.Updated( ur.timestamp ) ) )
         val withHintAnnouncePolicy =
@@ -292,7 +301,10 @@ object SimpleBlog:
           generator          = Some( "https://github.com/swaldman/unstatic" ),
         )
       val channel =
-        val tmp = Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(sproutInfo.sproutFeedSiteRooted)) ).withExtra(Element.Iffy.Synthetic())
+        val tmp =
+          val synthType = Element.Iffy.Type(SyntheticType.ItemUpdateFeed.toString)
+          val synthLink = Element.Atom.Link(href=info.absPermalink.toString,rel=Some(Element.Atom.LinkRelation.related))
+          Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(sproutInfo.sproutFeedSiteRooted)) ).withExtra(Element.Iffy.Synthetic(Some(synthType)).withExtra(synthLink))
         val completenessValue = Element.Iffy.Completeness.Value.Metadata
         val completeness = Element.Iffy.Completeness( completenessValue )
         tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
@@ -571,7 +583,8 @@ trait SimpleBlog extends ZTBlog:
                     Attribute.Key.Author.toString             -> saus.updateAnnouncementAuthor,
                     Attribute.Key.PubDate.toString            -> ur.timestamp,
                     Attribute.Key.HintAnnouncePolicy.toString -> saus.hintAnnouncePolicy,
-                    Attribute.Key.Permalink.toString          -> insertSuffixBeforeLeafExtension( info.permalinkPathSiteRooted, "-updated" + suffixFormatter.format(ur.timestamp) ).toString
+                    Attribute.Key.Permalink.toString          -> insertSuffixBeforeLeafExtension( info.permalinkPathSiteRooted, "-updated" + suffixFormatter.format(ur.timestamp) ).toString,
+                    Attribute.Key.SyntheticType.toString      -> SimpleBlog.SyntheticType.UpdateAnnouncement.toString
                   )
                   def run( input : Entry.Input ) : untemplate.Result[Nothing] =
                     given PageBase = PageBase.fromPage(input.renderLocation)
