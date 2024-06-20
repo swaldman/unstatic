@@ -578,6 +578,7 @@ trait SimpleBlog extends ZTBlog:
                         case None => "An untitled post was signifucantly updated"
                 val synthTemplateSeq = updatesToGenerate.map: ur =>
                   val info = entryInfo(ut)
+                  val mbDesc = ur.description
                   val attributes = immutable.Map[String,Any](
                     Attribute.Key.Title.toString              -> updateTitle,
                     Attribute.Key.Author.toString             -> saus.updateAnnouncementAuthor,
@@ -591,13 +592,18 @@ trait SimpleBlog extends ZTBlog:
                     val postLoc = site.location(info.permalinkPathSiteRooted)
                     def firstBit( title : String ) = s"""A significant update of <a href="${postLoc.relative}"><i>${title}</i></a> was made on ${dateTimeFormatter.format(ur.timestamp)}."""
                     def firstBitNoTitle = s"""A significant update of <a href="${postLoc.relative}">an untitled post</a> was made on ${dateTimeFormatter.format(ur.timestamp)}."""
-                    def secondBit( pubDate : Instant ) = s"""The post was originally published ${dateTimeFormatter.format(pubDate)}."""
+                    def middleBit( desc : String) = s"<blockquote>&rarr; " + desc + "</blockquote>"
+                    def lastBit( pubDate : Instant ) = s"""The post was originally published ${dateTimeFormatter.format(pubDate)}."""
                     val text =
-                      (mbTitle, mbPubDate) match
-                        case ( Some(title), Some(pubDate) ) => "<p>" + firstBit(title) + " " + secondBit(pubDate) + "</p>"
-                        case ( None,        Some(pubDate) ) => "<p>" + firstBitNoTitle + " " + secondBit(pubDate) + "</p>"
-                        case ( Some(title), None          ) => "<p>" + firstBit(title) + "</p>"
-                        case ( None,        None          ) => "<p>" + firstBitNoTitle + "</p>"
+                      (mbTitle, mbDesc, mbPubDate) match
+                        case ( Some(title), Some(desc), Some(pubDate) ) => "<p>" + firstBit(title) + "</p>" + middleBit(desc) + "<p>" + lastBit(pubDate) + "</p>"
+                        case ( None,        Some(desc), Some(pubDate) ) => "<p>" + firstBitNoTitle + "</p>" + middleBit(desc) + "<p>" + lastBit(pubDate) + "</p>"
+                        case ( Some(title), Some(desc), None          ) => "<p>" + firstBit(title) + "</p>" + middleBit(desc)
+                        case ( None,        Some(desc), None          ) => "<p>" + firstBitNoTitle + "</p>" + middleBit(desc)
+                        case ( Some(title),       None, Some(pubDate) ) => "<p>" + firstBit(title) + " " + lastBit(pubDate) + "</p>"
+                        case ( None,              None, Some(pubDate) ) => "<p>" + firstBitNoTitle + " " + lastBit(pubDate) + "</p>"
+                        case ( Some(title),       None, None          ) => "<p>" + firstBit(title) + "</p>"
+                        case ( None,              None, None          ) => "<p>" + firstBitNoTitle + "</p>"
                     untemplate.Result(None, text)
                   untemplate.Untemplate.Synthetic(
                     core = run,
