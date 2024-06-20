@@ -16,9 +16,7 @@ trait ZTBlog extends Blog with ZTEndpointBinding.Source:
   // you can override any of these
   val entryFragmentsResolveHashSpecials   = true   // memoization of fragments not supported
   val entryTopLevelResolveHashSpecials    = false
-  val entryTopLevelMemoize                = true   // memoize single-entryies embedded in top-level layout
   val multipleTopLevelResolveHashSpecials = false
-  val multipleTopLevelMemoize             = true   // memoize production of multple posts in top-level layouts
 
   def mediaDir( resolved : EntryResolved ) : SiteLocation
 
@@ -30,11 +28,11 @@ trait ZTBlog extends Blog with ZTEndpointBinding.Source:
         val pl  = permalink( resolved )
         val md  = mediaDir( resolved )
         val ids = identifiers( resolved )
-        site.publicReadOnlyHtml(pl, ZIO.attempt( renderSingle(pl,resolved ) ), Some(md.siteRootedPath), ids, entryTopLevelResolveHashSpecials, entryTopLevelMemoize)
+        site.publicReadOnlyHtml(pl, ZIO.attempt( renderSingle(pl,resolved ) ), Some(md.siteRootedPath), ids, entryTopLevelResolveHashSpecials )
       }.toVector
     val frontPageBinding =
       val maxToRender = maxFrontPageEntries.getOrElse( Int.MaxValue )
-      site.publicReadOnlyHtml(frontPage, ZIO.attempt( renderTop( frontPage, maxToRender ) ), None, frontPageIdentifiers, multipleTopLevelResolveHashSpecials, multipleTopLevelMemoize)
+      site.publicReadOnlyHtml(frontPage, ZIO.attempt( renderTop( frontPage, maxToRender ) ), None, frontPageIdentifiers, multipleTopLevelResolveHashSpecials )
     entryPageBindings :+ frontPageBinding
 
 
