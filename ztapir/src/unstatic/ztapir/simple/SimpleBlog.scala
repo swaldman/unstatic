@@ -63,6 +63,14 @@ object SimpleBlog:
             case sapf : SmtpAddressParseFailed => onlyCreators
         case _ => onlyCreators
 
+    def updateElement( blog : SimpleBlog )( urfd : UpdateRecord.ForDisplay ) =    
+      val updated = Element.Atom.Updated(urfd.timestamp)
+      val mbDesc = urfd.description.map(d=>Element.Atom.Summary(d))
+      val mbRev = urfd.supercededRevisionRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Revision(abs.toString) )
+      val mbDiff = urfd.diffRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Diff( abs.toString ) )
+      val creators = urfd.revisionAuthors.fold(Seq.empty)( _.map(author => Element.DublinCore.Creator(author) ) )
+      Element.Iffy.Update(updated,mbDesc,mbRev,mbDiff,creators)
+
     def rssItem( blog : SimpleBlog )(
       resolved : blog.EntryResolved,
       fullContent : Boolean,
@@ -83,13 +91,7 @@ object SimpleBlog:
           val (updateElements, mbInitialElement) =
             val urfds = blog.updateRecordsForDisplayFromSiteRoot(entryInfo)
             val (updates, initial) = (urfds.init,urfds.tail)
-            val ues = updates.map: urfd =>
-              val updated = Element.Atom.Updated(urfd.timestamp)
-              val mbDesc = urfd.description.map(d=>Element.Atom.Summary(d))
-              val mbRev = urfd.supercededRevisionRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Revision(abs.toString) )
-              val mbDiff = urfd.diffRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Diff( abs.toString ) )
-              val creators = urfd.revisionAuthors.fold(Seq.empty)( _.map(author => Element.DublinCore.Creator(author) ) )
-              Element.Iffy.Update(updated,mbDesc,mbRev,mbDiff,creators)
+            val ues = updates.map( updateElement(blog) )
             val mbInitial =
               val mbCreators = entryInfo.mbInitialAuthors.fold(None)( authors => Some(authors.map(author => Element.DublinCore.Creator(author))) )
               mbCreators.map( creators => Element.Iffy.Initial(creators) )
