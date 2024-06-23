@@ -83,6 +83,11 @@ object SimpleBlog:
       val (mbAuthorElement, mbCreatorElements) = mbAuthorElementCreatorElements( entryInfo.authors )
       val mbTitleElement = entryInfo.mbTitle.map( title => Element.Title( title ) )
       val linkElement = Element.Link(entryInfo.absPermalink.toString)
+
+      // XXX:  synthetic UpdateAnnouncement RSS relies on this, that absPermalink of SimpleBlog posts is always GUID.
+      //       if that changes, we'll have to revise the two places we generate <iffy:synthetic><iffy:type>UpdateAnnouncement</iffy:type></iffy:synthetic>
+      // Note: sprout RSS items are *not* posts (they point back to the updated post) so their GUIDs are not permalinks.
+      //       that's fine, but <iffy:original-guid> then points back to the permalink of the original post.
       val guidElement = Element.Guid(isPermalink = true, entryInfo.absPermalink.toString)
 
       val updateHistory = entryInfo.updateHistory
@@ -118,8 +123,10 @@ object SimpleBlog:
           if entryInfo.synthetic then
             val `type` = Attribute.Key.SyntheticType.caseSensitiveCheck(resolved.entryUntemplate).map( t => Element.Iffy.Type(t) )
             val extras = Attribute.Key.SyntheticExtras.caseSensitiveCheck(resolved.entryUntemplate)
-            val withType = standardItem.withExtra(Element.Iffy.Synthetic(`type`))
-            extras.fold( withType )( exs => withType.withExtras( exs ) )
+            val synth =
+              val sbase = Element.Iffy.Synthetic(`type`)
+              extras.fold( sbase )( exs => sbase.withExtras( exs ) )
+            standardItem.withExtra( synth )
           else
             standardItem
         val withCreator = mbCreatorElements.fold( withSynthetic )(dcces => withSynthetic.withExtras( dcces ))
@@ -269,7 +276,7 @@ object SimpleBlog:
           )
         val withCreators = mbCreatorElements.fold( baseBase )( creators => baseBase.withExtras( creators ) )
         withCreators.withExtra(cee)
-      def updateItem(urfd : UpdateRecord.ForDisplay, unfinished : Boolean ) =
+      def updateItem(urfd : UpdateRecord.ForDisplay, unfinished : Boolean ) : Element.Item =
         val titleTag = unfinished.tf("Latest Update")("Update")
         val linkElement = Element.Link(urfd.finalMinorRevisionRelative.fold(info.absPermalink.toString + "#sprout" + suffixFormatter.format(info.pubDate))(rel => blog.site.absFromSiteRooted(Rooted.root.resolve(rel))).toString)
         val guidElement = Element.Guid(isPermalink = false, guidBase + suffixFormatter.format( urfd.timestamp ) )
@@ -292,8 +299,9 @@ object SimpleBlog:
         val withContentEncoded = withCreators.withExtra( cee )
         val withSyntheticUpdateAnnouncement =
           val `type` = Element.Iffy.Type( SyntheticType.UpdateAnnouncement.toString )
+          val originalGuidElement = Element.Iffy.OriginalGuid(info.absPermalink.toString) // XXX, for now posts always use permalink as GUID. If that policy changes this will have to as well!
           val update = updateElement(blog)(urfd)
-          val synthElement = Element.Iffy.Synthetic(Some(`type`)).withExtra(update)
+          val synthElement = Element.Iffy.Synthetic(Some(`type`)).withExtra(originalGuidElement).withExtra(update)
           withContentEncoded.withExtra(synthElement)
         withSyntheticUpdateAnnouncement
       val items =
@@ -603,7 +611,10 @@ trait SimpleBlog extends ZTBlog:
                     Attribute.Key.HintAnnouncePolicy.toString -> saus.hintAnnouncePolicy,
                     Attribute.Key.Permalink.toString          -> insertSuffixBeforeLeafExtension( info.permalinkPathSiteRooted, "-updated" + suffixFormatter.format(urfd.timestamp) ).toString,
                     Attribute.Key.SyntheticType.toString      -> SimpleBlog.SyntheticType.UpdateAnnouncement.toString,
-                    Attribute.Key.SyntheticExtras.toString    -> Rss.updateElement(this)(urfd)
+
+                    // XXX: We're relying on GUID of original, "organic" posts always being permalink.
+                    //      If that changes, we'll need to update the attribute below.
+                    Attribute.Key.SyntheticExtras.toString    -> Seq(Element.Iffy.OriginalGuid(info.absPermalink.toString),Rss.updateElement(this)(urfd)) 
                   )
                   def run( input : Entry.Input ) : untemplate.Result[Nothing] =
                     given PageBase = PageBase.fromPage(input.renderLocation)
