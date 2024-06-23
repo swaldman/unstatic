@@ -7,6 +7,7 @@ import java.time.Instant
 import scala.util.Try
 import scala.collection.{immutable, IterableOnce}
 
+import scala.xml.Elem
 import audiofluidity.rss.Element
 
 // XXX: Here is some of where I'd like to warn,
@@ -33,6 +34,18 @@ object Attribute:
             case policy : Element.Iffy.HintAnnounce.Policy => policy
             case s : String => Element.Iffy.HintAnnounce.Policy.lenientParse(s).getOrElse( throw new BadAttributeException( s"'$s' is not a valid iffy:hint-announce policy." ) )
             case other      => unexpectedType(key, "String or Element.Iffy.HintAnnounce.Policy", other)
+      val SeqElem : Converter[Seq[scala.xml.Elem]] =
+        (key : String, a : Any) =>
+          a match
+            case elem : Elem => Seq(elem)
+            case element : Element[?] => Seq(element.toElem)
+            case seq : Seq[Elem|Element[?]] @unchecked => // we have to check at runtime
+              seq.map: (e : Elem|Element[?]|Any) =>
+                e match
+                  case elem    : Elem       => elem
+                  case element : Element[?] => element.toElem
+                  case other                => unexpectedType(key, "Seq[Element|Elem]", other)
+            case other => unexpectedType(key, "Seq[Element|Elem]", other)
       val SimpleString : Converter[String] =
         (key : String, a : Any) =>
           a match
@@ -41,7 +54,7 @@ object Attribute:
       val StringList : Converter[List[String]] =
         (key : String, a : Any) =>
           a match
-            case list : List[String] @ unchecked =>
+            case list : List[String] @unchecked =>
               if list.forall( _.isInstanceOf[String] ) then // gotta check at runtime
                 list
               else
@@ -97,4 +110,4 @@ object Attribute:
     case `Sprout`             extends Key[Boolean]                          (Key.Converter.SimpleBoolean,                      Nil) // see https://v5.chriskrycho.com/essays/feeds-are-not-fit-for-gardening/
     case `HintAnnouncePolicy` extends Key[Element.Iffy.HintAnnounce.Policy] (Key.Converter.HintAnnouncePolicy,                 Nil)
     case `SyntheticType`      extends Key[String]                           (Key.Converter.SimpleString,                       Nil) // intended only for synthetic untemplates!
-
+    case `SyntheticExtras`    extends Key[Seq[scala.xml.Elem]]              (Key.Converter.SeqElem,                            Nil)

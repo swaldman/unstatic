@@ -57,7 +57,7 @@ object ZTEndpointBinding:
 
     lazy val bindingBySiteRootedPath : immutable.Map[Rooted,ZTEndpointBinding] =
       effectiveEndpointBindings.map( b => (b.siteRootedPath, b) ).toMap
-  end Source  
+  end Source
 
   val IdentifierOrdering = AnyBinding.IdentifierOrdering
 

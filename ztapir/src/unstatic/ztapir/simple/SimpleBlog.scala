@@ -117,7 +117,9 @@ object SimpleBlog:
         val withSynthetic =
           if entryInfo.synthetic then
             val `type` = Attribute.Key.SyntheticType.caseSensitiveCheck(resolved.entryUntemplate).map( t => Element.Iffy.Type(t) )
-            standardItem.withExtra(Element.Iffy.Synthetic(`type`))
+            val extras = Attribute.Key.SyntheticExtras.caseSensitiveCheck(resolved.entryUntemplate)
+            val withType = standardItem.withExtra(Element.Iffy.Synthetic(`type`))
+            extras.fold( withType )( exs => withType.withExtras( exs ) )
           else
             standardItem
         val withCreator = mbCreatorElements.fold( withSynthetic )(dcces => withSynthetic.withExtras( dcces ))
@@ -287,7 +289,13 @@ object SimpleBlog:
             source = None
           )
         val withCreators = mbCreatorElements.fold( updateBase )( creators => updateBase.withExtras( creators ) )
-        withCreators.withExtra( cee )
+        val withContentEncoded = withCreators.withExtra( cee )
+        val withSyntheticUpdateAnnouncement =
+          val `type` = Element.Iffy.Type( SyntheticType.UpdateAnnouncement.toString )
+          val update = updateElement(blog)(urfd)
+          val synthElement = Element.Iffy.Synthetic(Some(`type`)).withExtra(update)
+          withContentEncoded.withExtra(synthElement)
+        withSyntheticUpdateAnnouncement
       val items =
         val revItems = if revisions.nonEmpty then updateItem( revisions.head, true ) +: revisions.tail.map( urfd => updateItem(urfd, false) ) else Nil
         revItems :+ baseItem
@@ -318,7 +326,7 @@ end SimpleBlog
 
 trait SimpleBlog extends ZTBlog:
 
-  import SimpleBlog.{Htmlifier,SproutInfo,SyntheticUpdateAnnouncementSpec,TimestampSuffixFormatterBase}
+  import SimpleBlog.{Htmlifier,Rss,SproutInfo,SyntheticUpdateAnnouncementSpec,TimestampSuffixFormatterBase}
 
   object Entry:
     val Presentation  = Blog.EntryPresentation
@@ -482,6 +490,10 @@ trait SimpleBlog extends ZTBlog:
     Entry.Info(mbTitle, authors, mbInitialAuthors, tags, pubDate, updateHistory, mbSproutInfo, mbAnchor, mbLastModified, synthetic, hintAnnouncePolicy, contentType, mediaPathSiteRooted, permalinkSiteRooted)
   end entryInfo
 
+  /*
+   *  Note that we always have one more UpdateRecord.ForDisplay than the original number of UpdateRecords, because we synthezise an
+   *  UpdateRecord.ForDisplay to capture the initial revision.
+   */
   private def updateRecordsForDisplay( renderedFrom : Rooted, permalinkPathSiteRooted : Rooted, updateHistorySorted : immutable.SortedSet[UpdateRecord], initialPubDate : Instant, mbInitialAuthors : Option[Seq[String]] ) : Seq[UpdateRecord.ForDisplay] =
     val initialNoLatestMinorRevision = UpdateRecord.ForDisplay( initialPubDate, Some("Initial publication."), None, None, None, None, None, mbInitialAuthors )
     if updateHistorySorted.nonEmpty then
@@ -565,7 +577,11 @@ trait SimpleBlog extends ZTBlog:
           Attribute.Key.UpdateHistory.caseInsensitiveCheck(ut) match
             case None => immutable.Set.empty
             case Some( sset ) =>
-              val updatesToGenerate = sset.toSeq.filter( _.timestamp > saus.beginning )
+              val info = entryInfo(ut)
+              val urfdsSiteRooted = updateRecordsForDisplayFromSiteRoot(info)
+              val updatesToGenerate =
+                val initialRevisionOmitted = urfdsSiteRooted.toVector.init
+                initialRevisionOmitted.filter( _.timestamp > saus.beginning )
               if updatesToGenerate.isEmpty then
                 immutable.Set.empty
               else
@@ -578,22 +594,22 @@ trait SimpleBlog extends ZTBlog:
                       mbPubDate match
                         case Some( instant ) => "An untitled post, first published " + dateTimeFormatter.format(instant) + ", was updated."
                         case None => "An untitled post was signifucantly updated"
-                val synthTemplateSeq = updatesToGenerate.map: ur =>
-                  val info = entryInfo(ut)
-                  val mbDesc = ur.description
+                val synthTemplateSeq = updatesToGenerate.map: urfd =>
+                  val mbDesc = urfd.description
                   val attributes = immutable.Map[String,Any](
                     Attribute.Key.Title.toString              -> updateTitle,
                     Attribute.Key.Author.toString             -> saus.updateAnnouncementAuthor,
-                    Attribute.Key.PubDate.toString            -> ur.timestamp,
+                    Attribute.Key.PubDate.toString            -> urfd.timestamp,
                     Attribute.Key.HintAnnouncePolicy.toString -> saus.hintAnnouncePolicy,
-                    Attribute.Key.Permalink.toString          -> insertSuffixBeforeLeafExtension( info.permalinkPathSiteRooted, "-updated" + suffixFormatter.format(ur.timestamp) ).toString,
-                    Attribute.Key.SyntheticType.toString      -> SimpleBlog.SyntheticType.UpdateAnnouncement.toString
+                    Attribute.Key.Permalink.toString          -> insertSuffixBeforeLeafExtension( info.permalinkPathSiteRooted, "-updated" + suffixFormatter.format(urfd.timestamp) ).toString,
+                    Attribute.Key.SyntheticType.toString      -> SimpleBlog.SyntheticType.UpdateAnnouncement.toString,
+                    Attribute.Key.SyntheticExtras.toString    -> Rss.updateElement(this)(urfd)
                   )
                   def run( input : Entry.Input ) : untemplate.Result[Nothing] =
                     given PageBase = PageBase.fromPage(input.renderLocation)
                     val postLoc = site.location(info.permalinkPathSiteRooted)
-                    def firstBit( title : String ) = s"""A significant update of <a href="${postLoc.relative}"><i>${title}</i></a> was made on ${dateTimeFormatter.format(ur.timestamp)}."""
-                    def firstBitNoTitle = s"""A significant update of <a href="${postLoc.relative}">an untitled post</a> was made on ${dateTimeFormatter.format(ur.timestamp)}."""
+                    def firstBit( title : String ) = s"""A significant update of <a href="${postLoc.relative}"><i>${title}</i></a> was made on ${dateTimeFormatter.format(urfd.timestamp)}."""
+                    def firstBitNoTitle = s"""A significant update of <a href="${postLoc.relative}">an untitled post</a> was made on ${dateTimeFormatter.format(urfd.timestamp)}."""
                     def middleBit( desc : String) = s"<blockquote>&rarr; " + desc + "</blockquote>"
                     def lastBit( pubDate : Instant ) = s"""The post was originally published ${dateTimeFormatter.format(pubDate)}."""
                     val text =
@@ -609,7 +625,7 @@ trait SimpleBlog extends ZTBlog:
                     untemplate.Result(None, text)
                   untemplate.Untemplate.Synthetic(
                     core = run,
-                    UntemplateName = ut.UntemplateName + "_update_announcement_" + ur.timestamp.toEpochMilli + "_html",
+                    UntemplateName = ut.UntemplateName + "_update_announcement_" + urfd.timestamp.toEpochMilli + "_html",
                     UntemplateInputName = "input",
                     UntemplateInputTypeDeclared = "unstatic.ztapir.simple.SimpleBlog.Entry.Input",
                     UntemplateInputTypeCanonical = Some( "unstatic.ztapir.simple.SimpleBlog.Entry.Input" ),
@@ -618,7 +634,7 @@ trait SimpleBlog extends ZTBlog:
                     UntemplateOutputMetadataTypeCanonical = Some("Nothing"),
                     UntemplateHeaderNote = "",
                     UntemplateAttributes = attributes,
-                    UntemplateLastModified = Some( ur.timestamp.toEpochMilli )
+                    UntemplateLastModified = Some( urfd.timestamp.toEpochMilli )
                   )
                 synthTemplateSeq.toSet
         end generatedEntries
