@@ -11,6 +11,7 @@ import audiofluidity.rss.{Element, Itemable, LanguageCode, Namespace}
 import com.mchange.mailutil.{Smtp,SmtpAddressParseFailed}
 
 import com.mchange.conveniences.boolean.*
+import audiofluidity.rss.Element.DublinCore
 
 object SimpleBlog:
   object SyntheticType:
@@ -63,13 +64,13 @@ object SimpleBlog:
             case sapf : SmtpAddressParseFailed => onlyCreators
         case _ => onlyCreators
 
-    def updateElement( blog : SimpleBlog )( urfd : UpdateRecord.ForDisplay ) =    
+    def updateElement( blog : SimpleBlog )( urfd : UpdateRecord.ForDisplay, initial : Option[Element.Iffy.Initial] = None ) =
       val updated = Element.Atom.Updated(urfd.timestamp)
       val mbDesc = urfd.description.map(d=>Element.Atom.Summary(d))
       val mbRev = urfd.supercededRevisionRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Revision(abs.toString) )
       val mbDiff = urfd.diffRelative.map(Rooted.root.resolve).map( blog.site.absFromSiteRooted ).map( abs => Element.Iffy.Diff( abs.toString ) )
       val creators = urfd.revisionAuthors.fold(Seq.empty)( _.map(author => Element.DublinCore.Creator(author) ) )
-      Element.Iffy.Update(updated,mbDesc,mbRev,mbDiff,creators)
+      Element.Iffy.Update(updated=updated,summary=mbDesc,revision=mbRev,diff=mbDiff,creators=creators,initial=initial)
 
     def rssItem( blog : SimpleBlog )(
       resolved : blog.EntryResolved,
@@ -96,10 +97,10 @@ object SimpleBlog:
           val (updateElements, mbInitialElement) =
             val urfds = blog.updateRecordsForDisplayFromSiteRoot(entryInfo)
             val (updates, initial) = (urfds.init,urfds.tail)
-            val ues = updates.map( updateElement(blog) )
+            val ues = updates.map( urfd => updateElement(blog)( urfd ) )
             val mbInitial =
               val mbCreators = entryInfo.mbInitialAuthors.fold(None)( authors => Some(authors.map(author => Element.DublinCore.Creator(author))) )
-              mbCreators.map( creators => Element.Iffy.Initial(creators) )
+              mbCreators.map( creators => Element.Iffy.Initial(creators=creators) )
             (ues,mbInitial)
           Element.Iffy.UpdateHistory( updateElements, mbInitialElement )
 
@@ -299,9 +300,8 @@ object SimpleBlog:
         val withContentEncoded = withCreators.withExtra( cee )
         val withSyntheticUpdateAnnouncement =
           val `type` = Element.Iffy.Type( SyntheticType.UpdateAnnouncement.toString )
-          val originalGuidElement = Element.Iffy.OriginalGuid(info.absPermalink.toString) // XXX, for now posts always use permalink as GUID. If that policy changes this will have to as well!
           val update = updateElement(blog)(urfd)
-          val synthElement = Element.Iffy.Synthetic(Some(`type`)).withExtra(originalGuidElement).withExtra(update)
+          val synthElement = Element.Iffy.Synthetic(Some(`type`)).withExtra(update)
           withContentEncoded.withExtra(synthElement)
         withSyntheticUpdateAnnouncement
       val items =
@@ -321,8 +321,15 @@ object SimpleBlog:
       val channel =
         val tmp =
           val synthType = Element.Iffy.Type(SyntheticType.ItemUpdateFeed.toString)
-          val synthLink = Element.Atom.Link(href=info.absPermalink.toString,rel=Some(Element.Atom.LinkRelation.related))
-          Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(sproutInfo.sproutFeedSiteRooted)) ).withExtra(Element.Iffy.Synthetic(Some(synthType)).withExtra(synthLink))
+          val initial = Element.Iffy.Initial(
+            info.mbTitle.map( title => Element.Atom.Title(title) ),
+            Some(Element.Atom.Link(info.absPermalink.toString)),
+            Some(Element.Iffy.Uid(info.absPermalink.toString)), // XXX: Relying on GUID == permalink
+            Some(Element.Atom.Published(info.pubDate)),
+            info.authors.map( name => Element.DublinCore.Creator(name) )
+          )
+          //val synthLink = Element.Atom.Link(href=info.absPermalink.toString,rel=Some(Element.Atom.LinkRelation.related))
+          Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(sproutInfo.sproutFeedSiteRooted)) ).withExtra(Element.Iffy.Synthetic(Some(synthType)).withExtra(initial))
         val completenessValue = Element.Iffy.Completeness.Value.Metadata
         val completeness = Element.Iffy.Completeness( completenessValue )
         tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
@@ -601,9 +608,19 @@ trait SimpleBlog extends ZTBlog:
                     case None =>
                       mbPubDate match
                         case Some( instant ) => "An untitled post, first published " + dateTimeFormatter.format(instant) + ", was updated."
-                        case None => "An untitled post was signifucantly updated"
+                        case None => "An untitled post was significantly updated"
                 val synthTemplateSeq = updatesToGenerate.map: urfd =>
                   val mbDesc = urfd.description
+                  val synthExtras =
+                    val initial =
+                      Element.Iffy.Initial(
+                        title = mbTitle.map( title => Element.Atom.Title(title) ),
+                        link = Some(Element.Atom.Link( info.absPermalink.toString )),
+                        guid = Some(Element.Iffy.Uid( info.absPermalink.toString )), // XXX: Relying on equivalence, guid == link
+                        published = Some(Element.Atom.Published( info.pubDate )),
+                        creators = info.authors.map( a => DublinCore.Creator(a) )
+                      )
+                    Rss.updateElement(this)(urfd, Some(initial))
                   val attributes = immutable.Map[String,Any](
                     Attribute.Key.Title.toString              -> updateTitle,
                     Attribute.Key.Author.toString             -> saus.updateAnnouncementAuthor,
@@ -614,7 +631,7 @@ trait SimpleBlog extends ZTBlog:
 
                     // XXX: We're relying on GUID of original, "organic" posts always being permalink.
                     //      If that changes, we'll need to update the attribute below.
-                    Attribute.Key.SyntheticExtras.toString    -> Seq(Element.Iffy.OriginalGuid(info.absPermalink.toString),Rss.updateElement(this)(urfd)) 
+                    Attribute.Key.SyntheticExtras.toString    -> synthExtras
                   )
                   def run( input : Entry.Input ) : untemplate.Result[Nothing] =
                     given PageBase = PageBase.fromPage(input.renderLocation)

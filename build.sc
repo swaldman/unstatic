@@ -18,7 +18,7 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
 
     // it'd save some repetition if these could be Products. maybe a fun macro project?
     object ZTapir {
-      val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.0.11-SNAPSHOT"
+      val AudiofluidityRss   = ivy"com.mchange::audiofluidity-rss:0.1.0-SNAPSHOT"
       val Conveniences       = ivy"com.mchange::conveniences:0.0.5"
       val Mailutil           = ivy"com.mchange::mailutil:0.0.4"
       val TapirFiles         = ivy"com.softwaremill.sttp.tapir::tapir-files:${TapirVersion}"
