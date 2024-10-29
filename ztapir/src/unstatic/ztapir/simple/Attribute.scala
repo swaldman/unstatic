@@ -85,13 +85,11 @@ object Attribute:
               else
                 throw new BadAttributeException( s"${key}: At least one element is not an UpdateRecord: ${io}" )
             case other => unexpectedType(key, "an iterable collection of UpdateRecord", other)
-      val Related : Converter[MainRelated | MainRelated.Multi] = new NoConversions[MainRelated | MainRelated.Multi]("Related or Related.Multi")
-
-      class NoConversions[T](expected : String) extends Converter[T]:
-        override def apply(key : String, a : Any) : T =
+      val Related : Converter[MainRelated | MainRelated.Multi] =
+        (key : String, a : Any) =>
           a match
-            case t :  T => t
-            case other      => unexpectedType(key, expected, other)
+            case ok : (MainRelated | MainRelated.Multi) => ok
+            case other => unexpectedType(key, "Related or Related.Multi", other)
     type Converter[T] = (String, Any) => T
     abstract class Abstract[T](val converter : Key.Converter[T], val variations : List[String]):
       private lazy val allNames = (this.toString :: this.variations)
