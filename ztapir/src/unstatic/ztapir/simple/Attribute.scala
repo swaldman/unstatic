@@ -16,6 +16,8 @@ import audiofluidity.rss.Element
 //      which seems not great.
 
 object Attribute:
+  import unstatic.ztapir.simple.Related as MainRelated
+
   object Key:
     extension ( ut : Untemplate.AnyUntemplate )
       def checkAttributeKeyStrict[T]( key : Attribute.Key[T] )  : Option[T] = key.caseSensitiveCheck( ut )
@@ -83,6 +85,13 @@ object Attribute:
               else
                 throw new BadAttributeException( s"${key}: At least one element is not an UpdateRecord: ${io}" )
             case other => unexpectedType(key, "an iterable collection of UpdateRecord", other)
+      val Related : Converter[MainRelated | MainRelated.Multi] = new NoConversions[MainRelated | MainRelated.Multi]("Related or Related.Multi")
+
+      class NoConversions[T](expected : String) extends Converter[T]:
+        override def apply(key : String, a : Any) : T =
+          a match
+            case t :  T => t
+            case other      => unexpectedType(key, expected, other)
     type Converter[T] = (String, Any) => T
     abstract class Abstract[T](val converter : Key.Converter[T], val variations : List[String]):
       private lazy val allNames = (this.toString :: this.variations)
@@ -111,3 +120,4 @@ object Attribute:
     case `HintAnnouncePolicy` extends Key[Element.Iffy.HintAnnounce.Policy] (Key.Converter.HintAnnouncePolicy,                 Nil)
     case `SyntheticType`      extends Key[String]                           (Key.Converter.SimpleString,                       Nil) // intended only for synthetic untemplates!
     case `SyntheticExtras`    extends Key[Seq[scala.xml.Elem]]              (Key.Converter.SeqElem,                            Nil)
+    case `Related`            extends Key[MainRelated | MainRelated.Multi]  (Key.Converter.Related,                            Nil)
