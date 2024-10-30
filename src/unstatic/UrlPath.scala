@@ -32,7 +32,7 @@ object UrlPath:
     def withPath( newPath : Rooted ) : Abs = this.copy( path = newPath )
     override def toString() : String = server.toString() + path.toString().substring(1)
 
-  trait PathPart[T <: PathPart[T]] extends UrlPath:
+  sealed trait PathPart[T <: PathPart[T]] extends UrlPath:
     self : T =>
     def elements: Vector[String]
     private[UrlPath] def withElements( elements : Vector[String] ) : T
