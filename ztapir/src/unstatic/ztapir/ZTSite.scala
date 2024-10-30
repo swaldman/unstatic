@@ -98,7 +98,7 @@ trait ZTSite extends Site, ZTEndpointBinding.Source:
     mutateReplace("img","src")
     mutateReplace("link","href")
 
-  private def replaceMaybeHashSpecial( sourceId : String, sourceSiteRooted : Rooted, href : String, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : String =
+  def replaceMaybeHashSpecial( sourceId : String, sourceSiteRooted : Rooted, href : String, mbMediaDirSiteRooted : Option[Rooted], resolveEscapes : Boolean ) : String =
     if href.startsWith("##") then
       val content = href.drop(2)
       if content.startsWith("/") then
