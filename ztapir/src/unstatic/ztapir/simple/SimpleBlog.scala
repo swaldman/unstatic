@@ -171,9 +171,15 @@ object SimpleBlog:
           def toItem : Element.Item = rssItem( blog )(resolved, blog.fullContentFeed)
 
     def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
-      val curationType =
+      val curationType : (Element[?] & Element.Iffy.Curation.Type) =
         val since = blog.onlyFeedEntriesSince.map( os => ZonedDateTime.from( os.atZone(blog.timeZone) ) )
-        Element.Iffy.Recent( since = since, last = blog.maxFeedEntries, operator = Some( Element.Iffy.Recent.Operator.and ) )
+        val bothNonEmpty = since.nonEmpty && blog.maxFeedEntries.nonEmpty
+        def recentForOperator( operator : Option[Element.Iffy.Recent.Operator] ) : Element.Iffy.Recent = Element.Iffy.Recent( since = since, last = blog.maxFeedEntries, operator = operator )
+        ( since, blog.maxFeedEntries ) match
+          case ( Some(_), Some(_) ) => recentForOperator( Some( Element.Iffy.Recent.Operator.and ) )
+          case ( Some(_), None)     => recentForOperator( None )
+          case ( None, Some(_) )    => recentForOperator( None )
+          case ( None, None )       => Element.Iffy.All.empty
       makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(blog.rssFeed.absolutePath), curationType = Some(curationType) )
 
     def makeDefaultSingleItemFeed( blog : SimpleBlog, resolved : blog.EntryResolved ) : Element.Rss =
