@@ -1,6 +1,6 @@
 package unstatic.ztapir.simple
 
-import java.time.{Instant, ZoneId, ZonedDateTime}
+import java.time.{Duration, Instant, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import DateTimeFormatter.ISO_INSTANT
 import scala.collection.{immutable, mutable}
@@ -171,16 +171,17 @@ object SimpleBlog:
           def toItem : Element.Item = rssItem( blog )(resolved, blog.fullContentFeed)
 
     def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
+      val onlyFeedEntriesSince = blog.findOnlyFeedEntriesSince
       val curationType : (Element[?] & Element.Iffy.Curation.Type) =
-        val since = blog.onlyFeedEntriesSince.map( os => ZonedDateTime.from( os.atZone(blog.timeZone) ) )
-        val bothNonEmpty = since.nonEmpty && blog.maxFeedEntries.nonEmpty
-        def recentForOperator( operator : Option[Element.Iffy.Recent.Operator] ) : Element.Iffy.Recent = Element.Iffy.Recent( since = since, last = blog.maxFeedEntries, operator = operator )
-        ( since, blog.maxFeedEntries ) match
+        val since = onlyFeedEntriesSince.map( os => ZonedDateTime.from( os.atZone(blog.timeZone) ) )
+        val bothNonEmpty = since.nonEmpty && blog.numFeedEntries.nonEmpty
+        def recentForOperator( operator : Option[Element.Iffy.Recent.Operator] ) : Element.Iffy.Recent = Element.Iffy.Recent( since = since, last = blog.numFeedEntries, operator = operator )
+        ( since, blog.numFeedEntries ) match
           case ( Some(_), Some(_) ) => recentForOperator( Some( Element.Iffy.Recent.Operator.and ) )
           case ( Some(_), None)     => recentForOperator( None )
           case ( None, Some(_) )    => recentForOperator( None )
           case ( None, None )       => Element.Iffy.All.empty
-      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(blog.rssFeed.absolutePath), curationType = Some(curationType) )
+      makeFeed( blog )( defaultItemable( blog ), blog.numFeedEntries, onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(blog.rssFeed.absolutePath), curationType = Some(curationType) )
 
     def makeDefaultSingleItemFeed( blog : SimpleBlog, resolved : blog.EntryResolved ) : Element.Rss =
       val selfUrl = blog.site.absFromSiteRooted( blog.singleItemRssSiteRootedFromPermalinkSiteRooted(resolved.entryInfo.permalinkPathSiteRooted) )
@@ -461,8 +462,10 @@ trait SimpleBlog extends ZTBlog:
   val site                : Site // the type is Blog.this.Site, narrowed to ZTSite by ZTBlog
   val frontPage           : SiteLocation
 
-  def maxFeedEntries       : Option[Int]     = maxFrontPageEntries
-  def onlyFeedEntriesSince : Option[Instant] = None
+  def numFeedEntries        : Option[Int]      = maxFrontPageEntries
+  def feedEntriesWithinLast : Option[Duration] = None
+
+  def findOnlyFeedEntriesSince : Option[Instant] = feedEntriesWithinLast.map( wl => Instant.now.minus( wl ) )
 
   // you must override this
   val feedTitle : String
