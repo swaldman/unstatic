@@ -171,11 +171,14 @@ object SimpleBlog:
           def toItem : Element.Item = rssItem( blog )(resolved, blog.fullContentFeed)
 
     def makeDefaultFeed( blog : SimpleBlog ) : Element.Rss =
-      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(blog.rssFeed.absolutePath) )
+      val curationType =
+        val since = blog.onlyFeedEntriesSince.map( os => ZonedDateTime.from( os.atZone(blog.timeZone) ) )
+        Element.Iffy.Recent( since = since, last = blog.maxFeedEntries, operator = Some( Element.Iffy.Recent.Operator.and ) )
+      makeFeed( blog )( defaultItemable( blog ), blog.maxFeedEntries, blog.onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(blog.rssFeed.absolutePath), curationType = Some(curationType) )
 
     def makeDefaultSingleItemFeed( blog : SimpleBlog, resolved : blog.EntryResolved ) : Element.Rss =
       val selfUrl = blog.site.absFromSiteRooted( blog.singleItemRssSiteRootedFromPermalinkSiteRooted(resolved.entryInfo.permalinkPathSiteRooted) )
-      makeFeed( blog )( defaultItemable( blog ), Some(1), None, defaultChannelSpecNow( blog ), DefaultRssNamespaces, immutable.SortedSet(resolved), atomSelfLinkUrl = Some(selfUrl) )
+      makeFeed( blog )( defaultItemable( blog ), Some(1), None, defaultChannelSpecNow( blog ), DefaultRssNamespaces, immutable.SortedSet(resolved), atomSelfLinkUrl = Some(selfUrl), curationType = Some( Element.Iffy.Single.empty ) )
 
     def makeFeed( blog : SimpleBlog )(
       itemable                 : Itemable[blog.EntryResolved],
@@ -185,6 +188,7 @@ object SimpleBlog:
       rssNamespaces            : List[Namespace],
       candidateEntriesResolved : immutable.SortedSet[blog.EntryResolved],
       atomSelfLinkUrl          : Option[Abs],
+      curationType             : Option[Element[?] & Element.Iffy.Curation.Type],
       extraChannelChildren     : List[Element[?]]     = Nil,
       extraChannelChildrenRaw  : List[scala.xml.Elem] = Nil,
       extraRssChildren         : List[Element[?]]     = Nil,
@@ -205,20 +209,24 @@ object SimpleBlog:
             case (None,None) =>
               candidateEntriesResolved
         val channel =
-          val tmp = //Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.rssFeed.absolutePath) )
+          val withAtomSelfLink =
             atomSelfLinkUrl match
               case Some( url ) => Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra( url ) )
               case None => Element.Channel.create( channelSpec, items )
-          val completenessValue =
-            if tmp.items.forall( _.guid.nonEmpty ) then
-              if blog.fullContentFeed then
-                Element.Iffy.Completeness.Value.Content
+          val withCuration =
+            curationType.fold( withAtomSelfLink )( ct => withAtomSelfLink.withExtra( Element.Iffy.Curation(ct) ) )
+          val completeness =
+            val completenessValue =
+              if withCuration.items.forall( _.guid.nonEmpty ) then
+                if blog.fullContentFeed then
+                  Element.Iffy.Completeness.Value.Content
+                else
+                  Element.Iffy.Completeness.Value.Metadata
               else
-                Element.Iffy.Completeness.Value.Metadata
-            else
-              Element.Iffy.Completeness.Value.Ping
-          val completeness = Element.Iffy.Completeness( completenessValue )
-          tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
+                Element.Iffy.Completeness.Value.Ping
+            Element.Iffy.Completeness( completenessValue )
+          val withCompleteness = withCuration.withExtra( completeness )
+          withCompleteness.withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
         Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
 
     def makeSproutFeed( blog : SimpleBlog )(
@@ -338,9 +346,10 @@ object SimpleBlog:
           )
           //val synthLink = Element.Atom.Link(href=info.absPermalink.toString,rel=Some(Element.Atom.LinkRelation.related))
           Element.Channel.create( channelSpec, items ).withExtra( atomLinkChannelExtra(blog.site.absFromSiteRooted(sproutInfo.sproutFeedSiteRooted)) ).withExtra(Element.Iffy.Synthetic(Some(synthType)).withExtra(initial))
+        val curationType = Element.Iffy.All.empty 
         val completenessValue = Element.Iffy.Completeness.Value.Metadata
         val completeness = Element.Iffy.Completeness( completenessValue )
-        tmp.withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
+        tmp.withExtra(Element.Iffy.Curation(curationType)).withExtra(completeness).withExtras( extraChannelChildren ).withExtras( extraChannelChildrenRaw )
       Element.Rss(channel).overNamespaces(rssNamespaces).withExtras( extraRssChildren ).withExtras( extraRssChildrenRaw )
     end makeSproutFeed
 
