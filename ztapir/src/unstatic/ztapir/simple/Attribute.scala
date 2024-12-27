@@ -90,6 +90,11 @@ object Attribute:
           a match
             case ok : (MainRelated | MainRelated.Multi) => ok
             case other => unexpectedType(key, "Related or Related.Multi", other)
+      val InReplyTo : Converter[Element.Iffy.ItemRef] =
+        (key : String, a : Any) =>
+          a match
+            case ok : Element.Iffy.ItemRef => ok
+            case other => unexpectedType(key, "Element.Iffy.InReplyTo", other)
     type Converter[T] = (String, Any) => T
     abstract class Abstract[T](val converter : Key.Converter[T], val variations : List[String]):
       private lazy val allNames = (this.toString :: this.variations)
@@ -119,3 +124,4 @@ object Attribute:
     case `SyntheticType`      extends Key[String]                           (Key.Converter.SimpleString,                       Nil) // intended only for synthetic untemplates!
     case `SyntheticExtras`    extends Key[Seq[scala.xml.Elem]]              (Key.Converter.SeqElem,                            Nil)
     case `Related`            extends Key[MainRelated | MainRelated.Multi]  (Key.Converter.Related,                            Nil)
+    case `InReplyTo`          extends Key[Element.Iffy.ItemRef]             (Key.Converter.InReplyTo,                          Nil)

@@ -13,6 +13,8 @@ import com.mchange.mailutil.{Smtp,SmtpAddressParseFailed}
 import com.mchange.conveniences.boolean.*
 import audiofluidity.rss.Element.DublinCore
 
+import Attribute.Key.checkAttributeKey
+
 object SimpleBlog:
   object SyntheticType:
     def lenientParse( string : String ) : Option[SyntheticType] = SyntheticType.values.find( _.toString.equalsIgnoreCase( string ) )
@@ -104,6 +106,8 @@ object SimpleBlog:
             (ues,mbInitial)
           Element.Iffy.UpdateHistory( updateElements, mbInitialElement )
 
+      val mbInReplyToItemRef = resolved.checkAttributeKey( Attribute.Key.InReplyTo )
+
       // println( s"mbUpdateHistoryElement: ${mbUpdateHistoryElement}" )
 
       val standardItem =
@@ -139,7 +143,8 @@ object SimpleBlog:
             withUpdated
         val withFullContent = if fullContent then withHintAnnouncePolicy.withExtra(Element.Content.Encoded(absolutizedHtml)) else withHintAnnouncePolicy
         val withUpdateHistory = mbUpdateHistoryElement.fold(withFullContent)( uhe => withFullContent.withExtra(uhe) )
-        withUpdateHistory
+        val withInReplyTo = mbInReplyToItemRef.fold(withUpdateHistory)( iref => withUpdateHistory.withExtra( Element.Iffy.InReplyTo( iref ) ) )
+        withInReplyTo
       baseItem.withExtras( extraChildren ).withExtras( extraChildrenRaw )
 
     def defaultChannelSpecNow( blog : SimpleBlog ) : Element.Channel.Spec =
