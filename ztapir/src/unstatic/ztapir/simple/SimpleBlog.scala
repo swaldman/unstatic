@@ -188,6 +188,11 @@ object SimpleBlog:
           case ( None, None )       => Element.Iffy.All.empty
       makeFeed( blog )( defaultItemable( blog ), blog.numFeedEntries, onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(blog.rssFeed.absolutePath), curationType = Some(curationType) )
 
+    def makeAllItemFeed( blog : SimpleBlog, allItemFeedSiteRooted : Rooted ) : Element.Rss =
+      val absPath = blog.site.absFromSiteRooted( allItemFeedSiteRooted )
+      makeFeed( blog )( defaultItemable( blog ), None, None, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(absPath), curationType = Some(Element.Iffy.All.empty) )
+
+
     def makeDefaultSingleItemFeed( blog : SimpleBlog, resolved : blog.EntryResolved ) : Element.Rss =
       val selfUrl = blog.site.absFromSiteRooted( blog.singleItemRssSiteRootedFromPermalinkSiteRooted(resolved.entryInfo.permalinkPathSiteRooted) )
       makeFeed( blog )( defaultItemable( blog ), Some(1), None, defaultChannelSpecNow( blog ), DefaultRssNamespaces, immutable.SortedSet(resolved), atomSelfLinkUrl = Some(selfUrl), curationType = Some( Element.Iffy.Single.empty ) )
@@ -508,6 +513,9 @@ trait SimpleBlog extends ZTBlog:
 
   // you can override this
   val generateSingleItemRss = false
+
+  // you can override this
+  val allItemFeedSiteRooted : Option[Rooted] = None
 
   /**
    * Filter the index of your untemplates for the blog's entries
@@ -837,7 +845,12 @@ trait SimpleBlog extends ZTBlog:
       else
         Nil
 
-    val stage0 = ZTEndpointBinding.Source.Trivial( (basicBindings ++ pastRevisionBindings) ++ sproutRssBindings ++ singleItemRssBindings :+ mainRssBinding )
+    val mbAllItemFeedBinding =
+      allItemFeedSiteRooted.map( aifsr =>
+        ZTEndpointBinding.publicReadOnlyRss( aifsr, site, zio.ZIO.attempt( SimpleBlog.Rss.makeAllItemFeed(this, aifsr).bytes ), Set("all-item-feed","all-item-rss") )
+      )
+
+    val stage0 = ZTEndpointBinding.Source.Trivial( (basicBindings ++ pastRevisionBindings) ++ sproutRssBindings ++ singleItemRssBindings ++ mbAllItemFeedBinding :+ mainRssBinding )
 
     val diffPrerequesites : Option[Tuple2[RevisionBinder.RevisionPathFinder,DiffBinder]] =
       for
