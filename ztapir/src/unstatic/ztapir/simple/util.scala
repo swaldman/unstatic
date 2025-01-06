@@ -36,6 +36,17 @@ object UpdateRecord:
 
 case class UpdateRecord( timestamp : Instant, description : Option[String], supercededRevisionSpec : Option[String], revisionAuthors : Option[Seq[String]] )
 
+case class SingleItemRssSpec( siteRooted : Rooted, title : Option[String] ):
+  def htmlLinkAlternateRelative( fromSiteRooted : Rooted ) =
+    val titlePart =
+      title match
+        case Some( t ) =>
+          val safeTitle = t.replaceAll("\"","&quot;").replaceAll(">","&gt;").replaceAll("<","&lt;")
+          s"""title="${safeTitle}" """
+        case None =>
+          " "
+    s"""<link rel="alternate" type="application/x-single-item-rss+xml" ${titlePart}href="${fromSiteRooted.relativizeSibling(siteRooted)}">"""
+
 private val LINESEP = scala.util.Properties.lineSeparator
 
 def findContentType( ut : untemplate.Untemplate[?,?] ) : String =
