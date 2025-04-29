@@ -67,7 +67,7 @@ object Related:
     sb.append(LINESEP)
     relatedMulti.title.foreach( title => sb.append(s"""  <div class="${relatedMultiTitleClass}">${title}</div>""") )
     sb.append(LINESEP)
-    relatedMulti.relateds.foreach(related => defaultRender(site, renderedOnSiteRooted, mbMediaDirSiteRooted, related, relatedDivClass, relatedTitleClass, relatedListClass))
+    relatedMulti.relateds.foreach(related => sb.append( defaultRender(site, renderedOnSiteRooted, mbMediaDirSiteRooted, related, relatedDivClass, relatedTitleClass, relatedListClass)) )
     sb.append("</div>")
     sb.toString
 
