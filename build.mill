@@ -1,3 +1,5 @@
+package build
+
 import $meta._
 
 import mill._
@@ -5,8 +7,8 @@ import mill.scalalib._
 import mill.scalalib.publish._
 import mill.define.Target
 
-trait UnstaticBuildModule extends ScalaModule with PublishModule {
-  val UnstaticVersion   = "0.3.3-SNAPSHOT"
+trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule {
+  val UnstaticVersion   = "0.3.3"
 
   object Dependency {
     val UntemplateVersion = "0.1.4"
@@ -60,17 +62,17 @@ trait UnstaticBuildModule extends ScalaModule with PublishModule {
   override def pomSettings    = T{pomSettings(artifactName())}
 }
 
-object unstatic extends RootModule with UnstaticBuildModule {
+object `package` extends RootModule with UnstaticBuildModule {
   override def artifactName = T{"unstatic"}
   override def ivyDeps = T{ super.ivyDeps() ++ Agg(Dependency.Untemplate, Dependency.Scribe) }
 
   object test extends ScalaTests {
-    override def scalaVersion = T{unstatic.scalaVersion()}
+    override def scalaVersion = T{build.scalaVersion()}
     override def ivyDeps = T{ super.ivyDeps() ++ Agg(Dependency.Test.Scalacheck, Dependency.Test.Utest) }
     override def testFramework = "utest.runner.Framework"
   }
   object ztapir extends UnstaticBuildModule {
-    override def moduleDeps = Seq(unstatic)
+    override def moduleDeps = Seq(build)
     override def artifactName = T{"unstatic-ztapir"}
     override def ivyDeps = T {
       super.ivyDeps() ++
