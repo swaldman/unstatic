@@ -8,7 +8,7 @@ import mill.scalalib.publish._
 import mill.define.Target
 
 trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule {
-  val UnstaticVersion   = "0.3.3"
+  val UnstaticVersion   = "0.4.0-SNAPSHOT"
 
   object Dependency {
     val UntemplateVersion = "0.1.4"
