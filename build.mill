@@ -9,9 +9,7 @@ import mill.javalib.publish.{Developer,License,PomSettings,VersionControl}
 import mill.scalalib.*
 import mill.scalalib.publish.*
 
-trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule:
-  val UnstaticVersion   = "0.4.0-SNAPSHOT"
-
+object UnstaticBuildModule:
   object Dependency:
     val UntemplateVersion = "0.1.4"
     val TapirVersion      = "1.10.9"
@@ -42,6 +40,11 @@ trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule:
     object Test:
       val Scalacheck = mvn"org.scalacheck::scalacheck:1.18.0"
       val Utest      = mvn"com.lihaoyi::utest:0.8.3"
+
+trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule:
+  val Dependency = UnstaticBuildModule.Dependency
+
+  val UnstaticVersion   = "0.4.0-SNAPSHOT"
 
   override def scalaVersion = "3.3.6"
   // override def scalacOptions = Task { Seq("-explain") }
