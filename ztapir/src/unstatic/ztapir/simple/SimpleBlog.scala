@@ -182,9 +182,9 @@ object SimpleBlog:
         val bothNonEmpty = since.nonEmpty && blog.numFeedEntries.nonEmpty
         def recentForOperator( operator : Option[Element.Iffy.Recent.Operator] ) : Element.Iffy.Recent = Element.Iffy.Recent( since = since, last = blog.numFeedEntries, operator = operator )
         ( since, blog.numFeedEntries ) match
-          case ( Some(_), Some(_) ) => recentForOperator( Some( Element.Iffy.Recent.Operator.and ) )
-          case ( Some(_), None)     => recentForOperator( None )
-          case ( None, Some(_) )    => recentForOperator( None )
+          case ( Some(_), Some(_) ) => Element.Iffy.Selection().withExtra( recentForOperator( Some( Element.Iffy.Recent.Operator.and ) ) )
+          case ( Some(_), None)     => Element.Iffy.Selection().withExtra( recentForOperator( None ) )
+          case ( None, Some(_) )    => Element.Iffy.Selection().withExtra( recentForOperator( None ) )
           case ( None, None )       => Element.Iffy.All.empty
       makeFeed( blog )( defaultItemable( blog ), blog.numFeedEntries, onlyFeedEntriesSince, defaultChannelSpecNow( blog ), DefaultRssNamespaces, blog.entriesResolved, atomSelfLinkUrl = Some(blog.rssFeed.absolutePath), curationType = Some(curationType) )
 

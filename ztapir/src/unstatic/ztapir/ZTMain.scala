@@ -5,7 +5,7 @@ import scala.collection.*
 import sttp.tapir.ztapir.*
 import sttp.tapir.server.interceptor.log.DefaultServerLog
 import sttp.tapir.server.ziohttp.{ZioHttpInterpreter, ZioHttpServerOptions}
-import zio.http.{HttpApp, Request, Response}
+import zio.http.{Request, Response}
 import zio.http.Server
 import zio.*
 
@@ -429,7 +429,7 @@ abstract class ZTMain(site: ZTSite, executableName : String = "unstatic") extend
       //.debug
       .catchSome { case _ : BadCommandLine => ZIO.unit }
       .tapError( reportFinalThrowable )
-      .exitCode
+      //.exitCode
 
   val runTask =
     for

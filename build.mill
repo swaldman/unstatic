@@ -1,4 +1,4 @@
-//| mill-version: 1.0.0
+//| mill-version: 1.0.3
 //| mill-jvm-version: 17
 //+---------------------------------------------------------------
 
@@ -11,23 +11,23 @@ import mill.scalalib.publish.*
 
 object UnstaticBuildModule:
   object Dependency:
-    val UntemplateVersion = "0.1.4"
-    val TapirVersion      = "1.10.9"
+    val UntemplateVersion = "0.3.0-SNAPSHOT"
+    val TapirVersion      = "1.11.42"
     val FlexmarkVersion   = "0.64.8"
 
     val Untemplate = mvn"com.mchange::untemplate:${UntemplateVersion}" // mill.scalalib.Dep
-    val Scribe     = mvn"com.outr::scribe:3.15.0"
+    val Scribe     = mvn"com.outr::scribe:3.17.0"
 
     // it'd save some repetition if these could be Products. maybe a fun macro project?
     object ZTapir:
-      val AudiofluidityRss   = mvn"com.mchange::audiofluidity-rss:0.1.1"
-      val Conveniences       = mvn"com.mchange::conveniences:0.0.5"
+      val AudiofluidityRss   = mvn"com.mchange::audiofluidity-rss:0.1.2-SNAPSHOT"
+      val Conveniences       = mvn"com.mchange::conveniences:0.0.6-SNAPSHOT"
       val Mailutil           = mvn"com.mchange::mailutil:0.0.4"
       val TapirFiles         = mvn"com.softwaremill.sttp.tapir::tapir-files:${TapirVersion}"
       val TapirZio           = mvn"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
-      val JGit               = mvn"org.eclipse.jgit:org.eclipse.jgit:6.9.0.202403050737-r"
-      val Jsoup              = mvn"org.jsoup:jsoup:1.17.2"
+      val JGit               = mvn"org.eclipse.jgit:org.eclipse.jgit:7.3.0.202506031305-r"
+      val Jsoup              = mvn"org.jsoup:jsoup:1.21.2"
       val JavaDiffUtils      = mvn"io.github.java-diff-utils:java-diff-utils:4.12"
       val FlexmarkSeq        = Seq (
         mvn"com.vladsch.flexmark:flexmark:${FlexmarkVersion}",
