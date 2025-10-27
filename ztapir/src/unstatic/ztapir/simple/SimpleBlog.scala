@@ -195,7 +195,8 @@ object SimpleBlog:
 
     def makeDefaultSingleItemFeed( blog : SimpleBlog, resolved : blog.EntryResolved ) : Element.Rss =
       val selfUrl = blog.site.absFromSiteRooted( blog.singleItemRssSiteRootedFromPermalinkSiteRooted(resolved.entryInfo.permalinkPathSiteRooted) )
-      makeFeed( blog )( defaultItemable( blog ), Some(1), None, defaultChannelSpecNow( blog ), DefaultRssNamespaces, immutable.SortedSet(resolved), atomSelfLinkUrl = Some(selfUrl), curationType = Some( Element.Iffy.Single.empty ) )
+      val jiggety = makeFeed( blog )( defaultItemable( blog ), Some(1), None, defaultChannelSpecNow( blog ), DefaultRssNamespaces, immutable.SortedSet(resolved), atomSelfLinkUrl = Some(selfUrl), curationType = Some( Element.Iffy.Single.empty ) )
+      jiggety.copy( channel=jiggety.channel.copy(lastBuildDate=None) ) // prevent every item's feed from uselessly changing, compicating git commits, on each rebuild
 
     def makeFeed( blog : SimpleBlog )(
       itemable                 : Itemable[blog.EntryResolved],
@@ -786,17 +787,17 @@ trait SimpleBlog extends ZTBlog:
       Map.empty
 
   // you can override this
-  def renderMultiplePrologue : String = ""
+  def renderMultiplePrologue( renderLocation : SiteLocation ) : String = ""
 
   // you can override this
-  def renderMultipleEpilogue : String = ""
+  def renderMultipleEpilogue( renderLocation : SiteLocation ) : String = ""
 
   def renderMultiple( renderLocation : SiteLocation, resolveds : immutable.Seq[EntryResolved] ) : String =
     // println("renderMultiple(...)")
     // resolveds.foreach( r => println(s"${r.entryUntemplate} -- ${r.entryInfo.pubDate}") )
     val fragmentTexts = resolveds.map(resolved => renderSingleFragment(renderLocation, resolved, Entry.Presentation.Multiple))
     val unifiedFragmentTexts = fragmentTexts.mkString(entrySeparator)
-    val fullText = renderMultiplePrologue + unifiedFragmentTexts + renderMultipleEpilogue
+    val fullText = renderMultiplePrologue(renderLocation) + unifiedFragmentTexts + renderMultipleEpilogue(renderLocation)
     val layoutPageInput = Layout.Input.Page(this, site, renderLocation, fullText, resolveds)
     layoutPage( layoutPageInput )
 
