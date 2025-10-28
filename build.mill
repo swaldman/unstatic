@@ -11,7 +11,7 @@ import mill.scalalib.publish.*
 
 object UnstaticBuildModule:
   object Dependency:
-    val UntemplateVersion = "0.3.0-SNAPSHOT"
+    val UntemplateVersion = "0.3.0"
     val TapirVersion      = "1.11.42"
     val FlexmarkVersion   = "0.64.8"
 
@@ -20,8 +20,8 @@ object UnstaticBuildModule:
 
     // it'd save some repetition if these could be Products. maybe a fun macro project?
     object ZTapir:
-      val AudiofluidityRss   = mvn"com.mchange::audiofluidity-rss:0.1.2-SNAPSHOT"
-      val Conveniences       = mvn"com.mchange::conveniences:0.0.6-SNAPSHOT"
+      val AudiofluidityRss   = mvn"com.mchange::audiofluidity-rss:0.1.2"
+      val Conveniences       = mvn"com.mchange::conveniences:0.0.6"
       val Mailutil           = mvn"com.mchange::mailutil:0.0.4"
       val TapirFiles         = mvn"com.softwaremill.sttp.tapir::tapir-files:${TapirVersion}"
       val TapirZio           = mvn"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
@@ -44,7 +44,7 @@ object UnstaticBuildModule:
 trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule:
   val Dependency = UnstaticBuildModule.Dependency
 
-  val UnstaticVersion   = "0.4.0-SNAPSHOT"
+  val UnstaticVersion   = "0.4.0"
 
   override def scalaVersion = "3.3.6"
   // override def scalacOptions = Task { Seq("-explain") }
