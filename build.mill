@@ -44,7 +44,7 @@ object UnstaticBuildModule:
 trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule:
   val Dependency = UnstaticBuildModule.Dependency
 
-  val UnstaticVersion   = "0.4.0"
+  val UnstaticVersion   = "0.4.1-SNAPSHOT"
 
   override def scalaVersion = "3.3.6"
   // override def scalacOptions = Task { Seq("-explain") }
