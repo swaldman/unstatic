@@ -12,23 +12,23 @@ import mill.scalalib.publish.*
 object UnstaticBuildModule:
   object Dependency:
     val UntemplateVersion = "0.3.0"
-    val TapirVersion      = "1.11.42"
+    val TapirVersion      = "1.13.30"
     val FlexmarkVersion   = "0.64.8"
 
     val Untemplate = mvn"com.mchange::untemplate:${UntemplateVersion}" // mill.scalalib.Dep
-    val Scribe     = mvn"com.outr::scribe:3.17.0"
+    val Scribe     = mvn"com.outr::scribe:3.19.0"
 
     // it'd save some repetition if these could be Products. maybe a fun macro project?
     object ZTapir:
-      val AudiofluidityRss   = mvn"com.mchange::audiofluidity-rss:0.1.2"
+      val AudiofluidityRss   = mvn"com.mchange::audiofluidity-rss:0.1.3"
       val Conveniences       = mvn"com.mchange::conveniences:0.0.6"
-      val Mailutil           = mvn"com.mchange::mailutil:0.0.4"
+      val Mailutil           = mvn"com.mchange::mailutil:0.0.5"
       val TapirFiles         = mvn"com.softwaremill.sttp.tapir::tapir-files:${TapirVersion}"
       val TapirZio           = mvn"com.softwaremill.sttp.tapir::tapir-zio:${TapirVersion}"
       val TapirZioHttpServer = mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:${TapirVersion}"
-      val JGit               = mvn"org.eclipse.jgit:org.eclipse.jgit:7.3.0.202506031305-r"
-      val Jsoup              = mvn"org.jsoup:jsoup:1.21.2"
-      val JavaDiffUtils      = mvn"io.github.java-diff-utils:java-diff-utils:4.12"
+      val JGit               = mvn"org.eclipse.jgit:org.eclipse.jgit:7.7.1.202607240634-r"
+      val Jsoup              = mvn"org.jsoup:jsoup:1.23.1"
+      val JavaDiffUtils      = mvn"io.github.java-diff-utils:java-diff-utils:4.17"
       val FlexmarkSeq        = Seq (
         mvn"com.vladsch.flexmark:flexmark:${FlexmarkVersion}",
         mvn"com.vladsch.flexmark:flexmark-ext-footnotes:${FlexmarkVersion}",
@@ -38,8 +38,8 @@ object UnstaticBuildModule:
       )
 
     object Test:
-      val Scalacheck = mvn"org.scalacheck::scalacheck:1.18.0"
-      val Utest      = mvn"com.lihaoyi::utest:0.8.3"
+      val Scalacheck = mvn"org.scalacheck::scalacheck:1.19.0"
+      val Utest      = mvn"com.lihaoyi::utest:0.9.5"
 
 trait UnstaticBuildModule extends ScalaModule with SonatypeCentralPublishModule:
   val Dependency = UnstaticBuildModule.Dependency
