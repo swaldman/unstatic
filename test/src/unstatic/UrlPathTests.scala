@@ -1,5 +1,8 @@
 package unstatic
 
+import scala.reflect.ClassTag
+import scala.util.control.NonFatal
+
 import utest.*
 
 import UrlPath.*
@@ -10,8 +13,8 @@ object UrlPathTests extends TestSuite:
   val HelloThere = BaseUrl.resolve(HelloThereRel)
   val HelloAgain = HelloThere.resolveSibling(UrlPath.Rel("again"))
 
-  def doesThrow[T <: Throwable]( exceptionGeneratingExpression: => Any) =
-    try { exceptionGeneratingExpression; false } catch { case e : T => true; case _ => false }
+  def doesThrow[T <: Throwable : ClassTag]( exceptionGeneratingExpression: => Any) =
+    try { exceptionGeneratingExpression; false } catch { case NonFatal(_ : T) => true; case _ => false }
 
   val tests = Tests {
     test("UrlPath.Abs.resolve") {
